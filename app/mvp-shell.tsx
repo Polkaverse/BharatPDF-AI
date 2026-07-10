@@ -690,64 +690,122 @@ export function MvpShell() {
         page.drawText("This invoice is digitally compiled via BharatPDF AI utility systems.", { x: 40, y: 45, size: 8, font, color: grayLine });
 
       } else if (selectedTemplate === "rent") {
-        // Rent Agreement
+        // Rent Agreement - Page 1
         page.drawRectangle({ x: 0, y: 831.89, width: 595.276, height: 10, color: primaryColor });
 
-        page.drawText("RESIDENTIAL RENT AGREEMENT", { x: 140, y: 780, size: 18, font: boldFont, color: primaryColor });
-        page.drawLine({ start: { x: 140, y: 772 }, end: { x: 455, y: 772 }, color: accentColor, thickness: 2 });
+        page.drawText("DEED OF RESIDENTIAL RENT AGREEMENT", { x: 120, y: 780, size: 16, font: boldFont, color: primaryColor });
+        page.drawLine({ start: { x: 120, y: 772 }, end: { x: 475, y: 772 }, color: accentColor, thickness: 2 });
 
-        const preamble = `This Residential Rent Agreement is made and executed on this date at Mumbai, Maharashtra, by and between the Landlord, ${f.landlordName}, and the Tenant, ${f.tenantName}.`;
+        const preamble = `This Deed of Residential Rent Agreement is made and executed on this date at Mumbai, Maharashtra, by and between:
+
+THE LANDLORD: Shri/Smt. ${f.landlordName}, residing permanently at the address specified in identity records, hereinafter referred to as the "FIRST PARTY" (which expression shall unless repugnant to the context mean and include heirs, executors, and assigns).
+
+AND
+
+THE TENANT: Shri/Smt. ${f.tenantName}, hereinafter referred to as the "SECOND PARTY" (which expression shall unless repugnant to the context mean and include heirs, executors, and assigns).`;
         
         let yPos = 730;
-        const preambleLines = wrapText(preamble, 515, 11);
+        const preambleLines = wrapText(preamble, 515, 10);
         for (const line of preambleLines) {
-          page.drawText(line, { x: 40, y: yPos, size: 11, font, color: textColor });
-          yPos -= 20;
+          page.drawText(line, { x: 40, y: yPos, size: 10, font, color: textColor });
+          yPos -= 18;
         }
 
-        // Sections
-        const sections = [
+        // Page 1 Sections
+        const p1Sections = [
           {
-            title: "1. PROPERTY DESCRIPTION",
-            body: `The Landlord hereby leases to the Tenant the residential property situated at: ${f.propertyAddress}. The property shall be used solely for private residential tenancy.`
+            title: "1. SCHEDULE OF LEASED PREMISES",
+            body: `The First Party hereby leases and demises unto the Second Party all that residential property described as: ${f.propertyAddress}. The premises are fully equipped with basic utilities and electrical fixtures in functional condition.`
           },
           {
-            title: "2. LEASE TERM & COMMENCEMENT",
-            body: `This lease is valid for an initial period of 11 months commencing on date: ${f.agreementStartDate}. Any renewal shall require fresh terms mutually agreed in writing.`
+            title: "2. LEASE TERM & RENEWALS",
+            body: `This Rent Agreement is valid for an initial period of eleven (11) months starting from the commencement date: ${f.agreementStartDate}. Upon expiry of the initial term, the lease may be renewed subject to fresh terms, written consent, and a standard 10% escalation in the monthly rent.`
           },
           {
-            title: "3. RENT & SECURITY DEPOSIT",
-            body: `The Tenant agrees to pay the Landlord a monthly rent of INR ${f.monthlyRent} payable in advance on or before the 5th day of every calendar month. Additionally, the Tenant has deposited a refundable Security Deposit of INR ${f.securityDeposit} with the Landlord.`
+            title: "3. CONSIDERATION, RENT & SECURITY DEPOSIT",
+            body: `The Second Party agrees to pay the First Party a monthly rent of INR ${f.monthlyRent} (Rupees Only) payable in advance on or before the 5th day of every calendar month via bank transfer. Additionally, the Second Party has deposited a refundable interest-free Security Deposit of INR ${f.securityDeposit} with the First Party as collateral.`
           },
           {
-            title: "4. REPAIRS & COVENANTS",
-            body: "The Tenant shall maintain the premises in good and clean order, normal wear and tear excepted. The Tenant shall not perform structural modifications without the Landlord's written consent."
+            title: "4. PROPERTY MAINTENANCE & RESTRICTIONS",
+            body: "The Second Party agrees to keep the interiors of the leased premises in good, clean, and tenantable condition. The Second Party shall not carry out any structural changes, wall breakouts, or major modifications without the explicit prior written authorization of the First Party."
           }
         ];
 
-        for (const sec of sections) {
+        for (const sec of p1Sections) {
           yPos -= 10;
           page.drawText(sec.title, { x: 40, y: yPos, size: 11, font: boldFont, color: primaryColor });
-          yPos -= 18;
-          const bodyLines = wrapText(sec.body, 515, 10);
+          yPos -= 16;
+          const bodyLines = wrapText(sec.body, 515, 9.5);
           for (const line of bodyLines) {
-            page.drawText(line, { x: 40, y: yPos, size: 10, font, color: textColor });
-            yPos -= 18;
+            page.drawText(line, { x: 40, y: yPos, size: 9.5, font, color: textColor });
+            yPos -= 16;
           }
         }
 
-        // Signature placeholders
-        yPos -= 40;
-        page.drawLine({ start: { x: 40, y: yPos }, end: { x: 555, y: yPos }, color: grayLine, thickness: 1 });
-        yPos -= 30;
-        page.drawText("IN WITNESS WHEREOF, the parties hereto sign below:", { x: 40, y: yPos, size: 10, font: boldFont });
-        
-        yPos -= 80;
-        page.drawText("_______________________________", { x: 40, y: yPos, size: 11, font });
-        page.drawText(`LANDLORD: ${f.landlordName}`, { x: 40, y: yPos - 15, size: 10, font: boldFont, color: primaryColor });
+        page.drawText("Continued on Page 2...", { x: 450, y: 45, size: 9, font: boldFont, color: accentColor });
 
-        page.drawText("_______________________________", { x: 320, y: yPos, size: 11, font });
-        page.drawText(`TENANT: ${f.tenantName}`, { x: 320, y: yPos - 15, size: 10, font: boldFont, color: primaryColor });
+        // --- Rent Agreement - Page 2 ---
+        const page2 = pdf.addPage([595.276, 841.89]);
+        page2.drawRectangle({ x: 0, y: 831.89, width: 595.276, height: 10, color: primaryColor });
+        page2.drawText("DEED OF RENT AGREEMENT (CONTD.)", { x: 40, y: 790, size: 12, font: boldFont, color: primaryColor });
+        page2.drawLine({ start: { x: 40, y: 780 }, end: { x: 555, y: 780 }, color: grayLine, thickness: 1 });
+
+        let yPos2 = 750;
+
+        const p2Sections = [
+          {
+            title: "5. UTILITY CHARGES & SOCIETY MAINTENANCE DUES",
+            body: "The Second Party (Tenant) shall pay all charges for electricity consumed, internet connectivity, and municipal water bills directly to the respective authorities. Regular society maintenance charges shall be borne by the First Party (Landlord) unless otherwise agreed."
+          },
+          {
+            title: "6. RESTRICTIONS ON SUBLETTING",
+            body: "The Second Party shall not sublet, assign, transfer, or part with the possession of the leased premises or any part thereof to any other person. The premises shall be occupied strictly for residential purposes by the designated family members only."
+          },
+          {
+            title: "7. LEASE TERMINATION & NOTICE PERIOD",
+            body: "Either party may terminate this agreement by providing at least one (1) month of written notice in advance. If the Second Party vacates before completing the initial 6 months, the security deposit shall be subject to deductions for administrative expenses."
+          },
+          {
+            title: "8. DISPUTE RESOLUTION & LOCAL JURISDICTION",
+            body: "This Deed of Agreement is governed by the laws of India and Rent Control legislation of Maharashtra. Any disputes arising under this deed shall be subject to the exclusive jurisdiction of the competent local courts in Mumbai."
+          }
+        ];
+
+        for (const sec of p2Sections) {
+          yPos2 -= 10;
+          page2.drawText(sec.title, { x: 40, y: yPos2, size: 11, font: boldFont, color: primaryColor });
+          yPos2 -= 16;
+          const bodyLines = wrapText(sec.body, 515, 9.5);
+          for (const line of bodyLines) {
+            page2.drawText(line, { x: 40, y: yPos2, size: 9.5, font, color: textColor });
+            yPos2 -= 16;
+          }
+        }
+
+        // Signatures Block
+        yPos2 -= 30;
+        page2.drawLine({ start: { x: 40, y: yPos2 }, end: { x: 555, y: yPos2 }, color: grayLine, thickness: 1 });
+        yPos2 -= 25;
+        page2.drawText("IN WITNESS WHEREOF, the parties hereto sign below:", { x: 40, y: yPos2, size: 10, font: boldFont });
+        
+        yPos2 -= 60;
+        page2.drawText("_______________________________", { x: 40, y: yPos2, size: 11, font });
+        page2.drawText(`FIRST PARTY (LANDLORD):`, { x: 40, y: yPos2 - 15, size: 10, font: boldFont, color: primaryColor });
+        page2.drawText(f.landlordName, { x: 40, y: yPos2 - 30, size: 9, font });
+
+        page2.drawText("_______________________________", { x: 320, y: yPos2, size: 11, font });
+        page2.drawText(`SECOND PARTY (TENANT):`, { x: 320, y: yPos2 - 15, size: 10, font: boldFont, color: primaryColor });
+        page2.drawText(f.tenantName, { x: 320, y: yPos2 - 30, size: 9, font });
+
+        // Witnesses
+        yPos2 -= 80;
+        page2.drawText("WITNESS 1:", { x: 40, y: yPos2, size: 10, font: boldFont, color: accentColor });
+        page2.drawText("Signature: ______________________", { x: 40, y: yPos2 - 20, size: 9, font });
+        page2.drawText("Name/Address: __________________", { x: 40, y: yPos2 - 35, size: 9, font });
+
+        page2.drawText("WITNESS 2:", { x: 320, y: yPos2, size: 10, font: boldFont, color: accentColor });
+        page2.drawText("Signature: ______________________", { x: 320, y: yPos2 - 20, size: 9, font });
+        page2.drawText("Name/Address: __________________", { x: 320, y: yPos2 - 35, size: 9, font });
 
       } else if (selectedTemplate === "resume") {
         // Resume Template
