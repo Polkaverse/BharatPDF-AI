@@ -216,7 +216,7 @@ export function MvpShell() {
 
   // Helper trigger downloads
   const downloadBytes = (bytes: Uint8Array, filename: string, mime: string = "application/pdf") => {
-    const blob = new Blob([bytes as any], { type: mime });
+    const blob = new Blob([bytes as unknown as BlobPart], { type: mime });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
