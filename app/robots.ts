@@ -6,6 +6,6 @@ export default function robots(): MetadataRoute.Robots {
       userAgent: "*",
       allow: "/",
     },
-    sitemap: "https://pdf-studio-in.vercel.app/sitemap.xml",
+    sitemap: "https://pdf-studio-in-pankajchaudhary.vercel.app/sitemap.xml",
   };
 }
