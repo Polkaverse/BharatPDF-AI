@@ -91,4 +91,4 @@ Deploy to production via CLI:
 ```bash
 vercel --prod --yes
 ```
-This deploys the Next.js target directory seamlessly to `https://pdf-studio-in-pankajchaudhary.vercel.app`.
+This deploys the Next.js target directory seamlessly to `https://pdfstudiospace.vercel.app`.

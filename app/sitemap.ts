@@ -3,7 +3,7 @@ import { MetadataRoute } from "next";
 export default function sitemap(): MetadataRoute.Sitemap {
   return [
     {
-      url: "https://pdf-studio-in-pankajchaudhary.vercel.app",
+      url: "https://pdfstudiospace.vercel.app",
       lastModified: new Date(),
       changeFrequency: "daily",
       priority: 1.0,
