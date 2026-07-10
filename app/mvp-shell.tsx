@@ -1018,7 +1018,6 @@ THE TENANT: Shri/Smt. ${f.tenantName}, hereinafter referred to as the "SECOND PA
       <header style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
         <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
           <img src="/logo.png" alt="PDF Studio" style={{ height: "8.5rem", width: "auto", mixBlendMode: "multiply", marginTop: "-1.2rem", marginBottom: "-1.2rem" }} />
-          <span className="status-pill scanned" style={{ fontSize: "0.75rem", padding: "0.2rem 0.5rem" }}>v1.0 MVP</span>
         </div>
         <div className="trust-strip" style={{ margin: 0 }}>
           <span><Lock size={12} /> Secure Client-Side Engine</span>
