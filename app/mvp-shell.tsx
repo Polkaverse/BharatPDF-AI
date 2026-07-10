@@ -395,22 +395,23 @@ export function MvpShell() {
     setError(null);
     setOcrText("");
     setProcessing(true);
-    setOcrProgress("Initializing Tesseract OCR...");
+    setOcrProgress("Sending document to secure backend OCR engine...");
     try {
-      const worker = await Tesseract.createWorker("eng+hin", 1, {
-        logger: (m) => {
-          if (m.status === "recognizing text") {
-            setOcrProgress(`Recognizing: ${Math.round(m.progress * 100)}%`);
-          }
-        }
+      const formData = new FormData();
+      formData.append("file", ocrFile);
+      formData.append("lang", ocrLang);
+
+      const res = await fetch("/api/workflows/ocr", {
+        method: "POST",
+        body: formData,
       });
-      
-      const fileUrl = URL.createObjectURL(ocrFile);
-      const { data: { text } } = await worker.recognize(fileUrl);
-      
-      setOcrText(text || "No text could be recognized.");
-      await worker.terminate();
-      URL.revokeObjectURL(fileUrl);
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "OCR request failed.");
+      }
+
+      setOcrText(data.text || "No text could be recognized.");
       setSuccess("OCR extraction complete!");
     } catch (err: any) {
       setError("Failed to run OCR: " + err.message);
