@@ -1,6 +1,6 @@
-# BharatPDF AI
+# PDF Studio
 
-BharatPDF AI is an AI-powered task-first PDF utility, OCR, eSign, translation, and document template generation platform designed specifically for Indian use cases (students, MSMEs, professionals, CA/legal offices).
+PDF Studio is an AI-powered task-first PDF utility, OCR, eSign, translation, and document template generation platform designed for a wide range of use cases (students, MSMEs, professionals, CA/legal offices).
 
 ## Technical owner
 

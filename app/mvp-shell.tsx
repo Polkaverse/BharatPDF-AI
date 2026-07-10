@@ -247,7 +247,7 @@ export function MvpShell() {
         setProgress(Math.round((i / utilityFiles.length) * 80) + 20);
       }
       const mergedPdfBytes = await mergedPdf.save();
-      downloadBytes(mergedPdfBytes, "merged_bharatpdf.pdf");
+      downloadBytes(mergedPdfBytes, "merged_pdf_studio.pdf");
       setSuccess("Successfully merged PDFs!");
     } catch (err: any) {
       setError("Failed to merge PDFs: " + err.message);
@@ -488,7 +488,7 @@ export function MvpShell() {
         rotate: degrees(45),
       });
 
-      certPage.drawText("BharatPDF AI eSign Certificate", {
+      certPage.drawText("PDF Studio eSign Certificate", {
         x: 80,
         y: 740,
         size: 24,
@@ -522,7 +522,7 @@ export function MvpShell() {
         ["Document Hash (SHA-256):", docHash],
         ["Signature Placement:", `Page ${signPage} (Position X:${signX}%, Y:${signY}%)`],
         ["Regulatory Standard:", "Information Technology Act, 2000 (India)"],
-        ["Verification Authority:", "BharatPDF AI Secure Signing Network"]
+        ["Verification Authority:", "PDF Studio Secure Signing Network"]
       ];
 
       let currentY = 640;
@@ -686,7 +686,7 @@ export function MvpShell() {
 
         // Scannable UPI QR Code generator (dynamic API visual placeholder)
         // Draw real scannable QR Image inside the invoice
-        const upiString = encodeURIComponent(`upi://pay?pa=shop@upi&pn=BharatPDF&am=${finalTotal.toFixed(2)}&cu=INR`);
+        const upiString = encodeURIComponent(`upi://pay?pa=shop@upi&pn=PDFStudio&am=${finalTotal.toFixed(2)}&cu=INR`);
         const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${upiString}`;
         try {
           const qrBytes = await fetch(qrUrl).then((res) => res.arrayBuffer());
@@ -698,7 +698,7 @@ export function MvpShell() {
 
         // Thank you footer
         page.drawText("Thank you for your business!", { x: 40, y: 60, size: 10, font: boldFont, color: primaryColor });
-        page.drawText("This invoice is digitally compiled via BharatPDF AI utility systems.", { x: 40, y: 45, size: 8, font, color: grayLine });
+        page.drawText("This invoice is digitally compiled via PDF Studio utility systems.", { x: 40, y: 45, size: 8, font, color: grayLine });
 
       } else if (selectedTemplate === "rent") {
         // Rent Agreement - Page 1
@@ -1017,12 +1017,12 @@ THE TENANT: Shri/Smt. ${f.tenantName}, hereinafter referred to as the "SECOND PA
       {/* Top Brand Banner */}
       <header style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "2rem" }}>
         <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-          <span style={{ fontSize: "1.8rem", fontWeight: "bold", background: "linear-gradient(135deg, #c94d21, #e87a24)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>BharatPDF AI</span>
+          <span style={{ fontSize: "1.8rem", fontWeight: "bold", background: "linear-gradient(135deg, #c94d21, #e87a24)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>PDF Studio</span>
           <span className="status-pill scanned" style={{ fontSize: "0.75rem", padding: "0.2rem 0.5rem" }}>v1.0 MVP</span>
         </div>
         <div className="trust-strip" style={{ margin: 0 }}>
           <span><Lock size={12} /> Secure Client-Side Engine</span>
-          <span>100% Indian Infrastructure</span>
+          <span>100% Private Processing</span>
         </div>
       </header>
 
@@ -1030,9 +1030,9 @@ THE TENANT: Shri/Smt. ${f.tenantName}, hereinafter referred to as the "SECOND PA
         {/* Left Side: Product Positioning */}
         <div className="hero-copy">
           <p className="eyebrow">Zero-Migration Utility</p>
-          <h1 style={{ fontSize: "2.8rem" }}>BharatPDF AI</h1>
+          <h1 style={{ fontSize: "2.8rem" }}>PDF Studio</h1>
           <p className="lede">
-            Fully functional client-side PDF utility suite, Indian language OCR (English + Hindi), visual eSignature placement with audit certifications, and localized document templates.
+            Fully functional client-side PDF utility suite, multilingual OCR (English + Hindi/Tamil/Telugu), visual eSignature placement with audit certifications, and localized document templates.
           </p>
 
           <div style={{ marginTop: "2rem" }}>

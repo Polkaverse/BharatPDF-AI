@@ -6,6 +6,6 @@ export default function robots(): MetadataRoute.Robots {
       userAgent: "*",
       allow: "/",
     },
-    sitemap: "https://bharatpdf-ai.vercel.app/sitemap.xml",
+    sitemap: "https://pdf-studio.vercel.app/sitemap.xml",
   };
 }

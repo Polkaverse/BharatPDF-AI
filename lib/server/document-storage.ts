@@ -23,7 +23,7 @@ function sanitizeSegment(value: string) {
 }
 
 function getStorageRoot() {
-  return path.join(process.cwd(), ".bharatpdf", "uploads");
+  return path.join(process.cwd(), ".pdf-studio", "uploads");
 }
 
 export async function persistDocumentUpload(file: File, bytes: Buffer) {

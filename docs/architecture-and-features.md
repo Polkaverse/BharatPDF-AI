@@ -1,12 +1,12 @@
-# BharatPDF AI - Architecture & Feature Reference Guide
+# PDF Studio - Architecture & Feature Reference Guide
 
-This document outlines the detailed system architecture, codebase layout, feature workflows, data privacy model, and SEO implementation for **BharatPDF AI**.
+This document outlines the detailed system architecture, codebase layout, feature workflows, data privacy model, and SEO implementation for **PDF Studio**.
 
 ---
 
 ## 1. System Architecture Overview
 
-BharatPDF AI is designed as a task-first, zero-retention document processing utility. The system balances high-performance client-side operations (to minimize hosting cost and preserve data privacy) with resilient server-side routes for API integrations and fallback processing.
+PDF Studio is designed as a task-first, zero-retention document processing utility. The system balances high-performance client-side operations (to minimize hosting cost and preserve data privacy) with resilient server-side routes for API integrations and fallback processing.
 
 ```mermaid
 graph TD
@@ -60,7 +60,7 @@ graph TD
 
 ## 3. SEO & Discovery Configuration
 
-BharatPDF AI incorporates deep SEO optimizations to rank for search queries across Indian regions:
+PDF Studio incorporates deep SEO optimizations to rank for search queries across global and regional markets:
 
 1. **Title & Descriptions**: Custom tags target search intent (e.g. "Hindi PDF OCR online", "free PDF tools India", "GST Invoice PDF Generator").
 2. **Schema.org JSON-LD**: Injected structured data (Type: `SoftwareApplication`, Category: `BusinessApplication`, Currency: `INR`) to qualify for Google rich search results.
@@ -91,4 +91,4 @@ Deploy to production via CLI:
 ```bash
 vercel --prod --yes
 ```
-This deploys the Next.js target directory seamlessly to `https://bharatpdf-ai.vercel.app`.
+This deploys the Next.js target directory seamlessly to `https://pdf-studio.vercel.app`.

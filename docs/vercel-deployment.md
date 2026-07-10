@@ -1,6 +1,6 @@
-# BharatPDF Vercel Deployment Path
+# PDF Studio Vercel Deployment Path
 
-This repository is the canonical source for the BharatPDF MVP application.
+This repository is the canonical source for the PDF Studio MVP application.
 
 ## Branch policy
 
@@ -42,8 +42,8 @@ Expected result on the current MVP:
 
 The smallest working path is:
 
-1. Create or reuse the Vercel project `bharatpdf-ai`.
-2. Link the local repository checkout with `vercel link --yes --project bharatpdf-ai`.
+1. Create or reuse the Vercel project `pdf-studio`.
+2. Link the local repository checkout with `vercel link --yes --project pdf-studio`.
 3. Set `APP_BASE_URL`, `UPLOAD_MAX_MB`, and `RETENTION_HOURS` in the Vercel project.
 4. Deploy previews from the checked-out repo with `vercel`.
 5. Promote the stable branch with `vercel deploy --prod` from a `main` checkout after verification.
@@ -60,7 +60,7 @@ If GitHub auto-deploy is later enabled, keep `main` as the production branch and
 
 The repo publish and Vercel project linkage can be completed from this workspace, but GitHub-to-Vercel automatic deploy triggers still require either:
 
-- a Vercel Git integration connected to `Polkaverse/BharatPDF-AI`, or
+- a Vercel Git integration connected to `Polkaverse/pdf-studio`, or
 - a GitHub Actions deployment workflow with Vercel credentials stored as repository secrets.
 
 Until one of those is configured, production promotion is manual but reviewable.
