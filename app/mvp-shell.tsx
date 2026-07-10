@@ -986,27 +986,48 @@ THE TENANT: Shri/Smt. ${f.tenantName}, hereinafter referred to as the "SECOND PA
     } catch (err: any) {
       // Fallback local execution if the API endpoint or OpenAI isn't configured
       console.warn("API workflow failed, running local heuristic processing: ", err);
-      const text = await aiFile.text();
-      const words = text.split(/\s+/).filter(Boolean);
+      const isPdf = aiFile.name.toLowerCase().endsWith(".pdf") || aiFile.type === "application/pdf";
       
-      if (aiAction === "summarize") {
-        setAiResult({
-          summary: [
-            words.slice(0, 15).join(" ") + "...",
-            "Heuristic summary based on local file parsing.",
-            `Document word count: ${words.length} words.`
-          ],
-          keywords: Array.from(new Set(words.slice(0, 8))),
-          hash: "LOCAL_FALLBACK_MD5"
-        });
+      if (isPdf) {
+        if (aiAction === "summarize") {
+          setAiResult({
+            summary: [
+              "Could not complete online AI summary for PDF document.",
+              `System Error: ${err.message || "Endpoint failed to respond"}`,
+              "To run PDF text extraction and summarization, please check your network connection and ensure process variables (like OPENAI_API_KEY) are configured."
+            ],
+            keywords: ["PDF", "Offline", "Error", "Connection"],
+            hash: "ERROR_FALLBACK"
+          });
+        } else {
+          setAiResult({
+            translation: `[Local Fallback Warning] Offline client-side translation is not supported for binary PDF files. \n\nReason: ${err.message || "Endpoint failed to respond"}`,
+            hash: "ERROR_FALLBACK"
+          });
+        }
+        setError("AI pipeline failed. Displaying local warning.");
       } else {
-        // Translation heuristic Mock
-        setAiResult({
-          translation: `[Mock Local Translation (${translateTarget})] Transcripts: ${text.slice(0, 200)}...`,
-          hash: "LOCAL_FALLBACK_MD5"
-        });
+        const text = await aiFile.text();
+        const words = text.split(/\s+/).filter(Boolean);
+        
+        if (aiAction === "summarize") {
+          setAiResult({
+            summary: [
+              words.slice(0, 15).join(" ") + "...",
+              "Heuristic summary based on local file parsing.",
+              `Document word count: ${words.length} words.`
+            ],
+            keywords: Array.from(new Set(words.filter(w => w.length > 5).slice(0, 8))),
+            hash: "LOCAL_FALLBACK_MD5"
+          });
+        } else {
+          setAiResult({
+            translation: `[Mock Local Translation (${translateTarget})] Transcripts: ${text.slice(0, 200)}...`,
+            hash: "LOCAL_FALLBACK_MD5"
+          });
+        }
+        setSuccess("AI pipeline finished utilizing local parser fallback!");
       }
-      setSuccess("AI pipeline finished utilizing local parser fallback!");
     } finally {
       setProcessing(false);
     }

@@ -23,6 +23,9 @@ function sanitizeSegment(value: string) {
 }
 
 function getStorageRoot() {
+  if (process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME || process.env.VERCEL_ENV) {
+    return path.join("/tmp", ".pdf-studio", "uploads");
+  }
   return path.join(process.cwd(), ".pdf-studio", "uploads");
 }
 
