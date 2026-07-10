@@ -570,125 +570,306 @@ export function MvpShell() {
 
       const f = templateFields;
 
+      // Color Palette definition
+      const primaryColor = rgb(0.08, 0.18, 0.36); // Elegant Navy
+      const accentColor = rgb(0.79, 0.3, 0.13);  // Saffron Accent
+      const textColor = rgb(0.15, 0.15, 0.15);    // Charcoal Text
+      const lightBg = rgb(0.96, 0.97, 0.98);      // Very light gray
+      const grayLine = rgb(0.8, 0.8, 0.8);
+
+      // Text wrapping helper
+      const wrapText = (text: string, maxWidth: number, fontSize: number, useBold: boolean = false) => {
+        const words = text.split(" ");
+        const lines: string[] = [];
+        let currentLine = "";
+        const targetFont = useBold ? boldFont : font;
+
+        for (const word of words) {
+          const testLine = currentLine ? `${currentLine} ${word}` : word;
+          const width = targetFont.widthOfTextAtSize(testLine, fontSize);
+          if (width > maxWidth) {
+            lines.push(currentLine);
+            currentLine = word;
+          } else {
+            currentLine = testLine;
+          }
+        }
+        if (currentLine) lines.push(currentLine);
+        return lines;
+      };
+
       if (selectedTemplate === "invoice") {
         // GST Invoice Builder
-        page.drawText("TAX INVOICE", { x: 40, y: 780, size: 24, font: boldFont });
-        page.drawText(`Provider: ${f.shopName}`, { x: 40, y: 740, size: 12, font: boldFont });
-        page.drawText(`GSTIN: ${f.gstin}`, { x: 40, y: 720, size: 11, font });
-        page.drawText(`Bill To: ${f.customerName}`, { x: 40, y: 680, size: 11, font: boldFont });
+        // Saffron colored top accent bar
+        page.drawRectangle({ x: 0, y: 831.89, width: 595.276, height: 10, color: accentColor });
+
+        // Invoice Header
+        page.drawText("TAX INVOICE", { x: 40, y: 780, size: 26, font: boldFont, color: primaryColor });
         
-        // Table headers
-        page.drawRectangle({ x: 40, y: 620, width: 515, height: 25, color: rgb(0.95, 0.95, 0.95) });
-        page.drawText("Description", { x: 50, y: 628, size: 10, font: boldFont });
-        page.drawText("Qty", { x: 280, y: 628, size: 10, font: boldFont });
-        page.drawText("Rate (INR)", { x: 340, y: 628, size: 10, font: boldFont });
-        page.drawText("Total (INR)", { x: 460, y: 628, size: 10, font: boldFont });
+        // Metadata Box (Right Aligned Concept)
+        const dateStr = new Date().toLocaleDateString("en-IN");
+        page.drawText("Invoice Details", { x: 400, y: 790, size: 10, font: boldFont, color: accentColor });
+        page.drawText(`Date: ${dateStr}`, { x: 400, y: 775, size: 9, font });
+        page.drawText(`Invoice No: BPDF-${Math.floor(1000 + Math.random() * 9000)}`, { x: 400, y: 760, size: 9, font });
 
-        // Item Row
-        page.drawText(f.itemName, { x: 50, y: 590, size: 10, font });
-        page.drawText(f.itemQty, { x: 280, y: 590, size: 10, font });
-        page.drawText(f.itemRate, { x: 340, y: 590, size: 10, font });
+        // Vendor & Customer details columns
+        page.drawLine({ start: { x: 40, y: 740 }, end: { x: 555, y: 740 }, color: grayLine, thickness: 1 });
+
+        page.drawText("FROM (PROVIDER):", { x: 40, y: 720, size: 10, font: boldFont, color: primaryColor });
+        page.drawText(f.shopName, { x: 40, y: 705, size: 11, font: boldFont });
+        page.drawText(`GSTIN: ${f.gstin}`, { x: 40, y: 690, size: 10, font });
+
+        page.drawText("BILL TO (CUSTOMER):", { x: 300, y: 720, size: 10, font: boldFont, color: primaryColor });
+        page.drawText(f.customerName, { x: 300, y: 705, size: 11, font: boldFont });
+        page.drawText("State: Maharashtra (27)", { x: 300, y: 690, size: 10, font });
+
+        // Table Header
+        let yPos = 630;
+        page.drawRectangle({ x: 40, y: yPos, width: 515, height: 30, color: primaryColor });
+        page.drawText("Description", { x: 50, y: yPos + 10, size: 10, font: boldFont, color: rgb(1,1,1) });
+        page.drawText("Qty", { x: 280, y: yPos + 10, size: 10, font: boldFont, color: rgb(1,1,1) });
+        page.drawText("Rate (INR)", { x: 340, y: yPos + 10, size: 10, font: boldFont, color: rgb(1,1,1) });
+        page.drawText("Total (INR)", { x: 460, y: yPos + 10, size: 10, font: boldFont, color: rgb(1,1,1) });
+
+        // Item Rows
+        yPos -= 35;
+        page.drawRectangle({ x: 40, y: yPos, width: 515, height: 30, color: lightBg });
+        page.drawText(f.itemName, { x: 50, y: yPos + 10, size: 10, font, color: textColor });
+        page.drawText(f.itemQty, { x: 280, y: yPos + 10, size: 10, font, color: textColor });
+        page.drawText(parseFloat(f.itemRate).toFixed(2), { x: 340, y: yPos + 10, size: 10, font, color: textColor });
+        
         const subtotal = parseFloat(f.itemRate) * parseInt(f.itemQty);
-        page.drawText(subtotal.toFixed(2), { x: 460, y: 590, size: 10, font });
+        page.drawText(subtotal.toFixed(2), { x: 460, y: yPos + 10, size: 10, font, color: textColor });
 
-        // GST Breakdown
+        // Calculations & Breakdown
         const cgstAmount = (subtotal * parseFloat(f.cgstRate)) / 100;
         const sgstAmount = (subtotal * parseFloat(f.sgstRate)) / 100;
         const finalTotal = subtotal + cgstAmount + sgstAmount;
 
-        let curY = 540;
-        page.drawText(`CGST (${f.cgstRate}%):`, { x: 340, y: curY, size: 10, font });
-        page.drawText(cgstAmount.toFixed(2), { x: 460, y: curY, size: 10, font });
-        
-        curY -= 20;
-        page.drawText(`SGST (${f.sgstRate}%):`, { x: 340, y: curY, size: 10, font });
-        page.drawText(sgstAmount.toFixed(2), { x: 460, y: curY, size: 10, font });
+        yPos -= 30;
+        page.drawLine({ start: { x: 40, y: yPos }, end: { x: 555, y: yPos }, color: grayLine, thickness: 1 });
 
-        curY -= 25;
-        page.drawLine({ start: { x: 340, y: curY + 10 }, end: { x: 520, y: curY + 10 }, thickness: 1 });
-        page.drawText("Grand Total:", { x: 340, y: curY, size: 11, font: boldFont });
-        page.drawText(`INR ${finalTotal.toFixed(2)}`, { x: 460, y: curY, size: 11, font: boldFont });
-        
-      } else if (selectedTemplate === "rent") {
-        // Rent Agreement
-        page.drawText("RESIDENTIAL RENT AGREEMENT", { x: 150, y: 780, size: 16, font: boldFont });
-        
-        const agreementText = `This Rent Agreement is made on this date by and between Landlord, ${f.landlordName}, and Tenant, ${f.tenantName}.
+        yPos -= 25;
+        page.drawText("Subtotal:", { x: 340, y: yPos, size: 10, font });
+        page.drawText(`INR ${subtotal.toFixed(2)}`, { x: 460, y: yPos, size: 10, font });
 
-WHEREAS:
-1. The Landlord is the absolute owner of the property situated at:
-   ${f.propertyAddress}
-2. The Tenant wishes to take the property on lease for residential purposes.
+        yPos -= 20;
+        page.drawText(`CGST (${f.cgstRate}%):`, { x: 340, y: yPos, size: 10, font });
+        page.drawText(`INR ${cgstAmount.toFixed(2)}`, { x: 460, y: yPos, size: 10, font });
 
-IT IS AGREED AS FOLLOWS:
-- Rent: The monthly rent payable by the tenant is INR ${f.monthlyRent} per month, payable in advance on or before the 5th of each month.
-- Security Deposit: A security deposit of INR ${f.securityDeposit} has been paid to the landlord, refundable upon termination of tenancy.
-- Commencement: This tenancy commences on ${f.agreementStartDate} and shall be valid for 11 months.`;
+        yPos -= 20;
+        page.drawText(`SGST (${f.sgstRate}%):`, { x: 340, y: yPos, size: 10, font });
+        page.drawText(`INR ${sgstAmount.toFixed(2)}`, { x: 460, y: yPos, size: 10, font });
 
-        let lineY = 720;
-        const textLines = agreementText.split("\n");
-        for (const line of textLines) {
-          page.drawText(line, { x: 40, y: lineY, size: 11, font });
-          lineY -= 22;
+        yPos -= 30;
+        page.drawRectangle({ x: 320, y: yPos - 5, width: 235, height: 28, color: accentColor });
+        page.drawText("GRAND TOTAL:", { x: 330, y: yPos + 5, size: 11, font: boldFont, color: rgb(1,1,1) });
+        page.drawText(`INR ${finalTotal.toFixed(2)}`, { x: 450, y: yPos + 5, size: 11, font: boldFont, color: rgb(1,1,1) });
+
+        // Terms and QR Code Payment Box in footer
+        yPos -= 80;
+        page.drawRectangle({ x: 40, y: yPos - 20, width: 515, height: 80, color: lightBg, borderColor: grayLine, borderWidth: 1 });
+        page.drawText("Payment instructions:", { x: 50, y: yPos + 45, size: 9, font: boldFont, color: primaryColor });
+        page.drawText("Scan UPI QR Code to pay immediately.", { x: 50, y: yPos + 30, size: 9, font });
+        page.drawText("Account: Shop UPI Network Node", { x: 50, y: yPos + 15, size: 9, font });
+
+        // Scannable UPI QR Code generator (dynamic API visual placeholder)
+        // Draw real scannable QR Image inside the invoice
+        const upiString = encodeURIComponent(`upi://pay?pa=shop@upi&pn=BharatPDF&am=${finalTotal.toFixed(2)}&cu=INR`);
+        const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${upiString}`;
+        try {
+          const qrBytes = await fetch(qrUrl).then((res) => res.arrayBuffer());
+          const qrImage = await pdf.embedPng(qrBytes);
+          page.drawImage(qrImage, { x: 480, y: yPos - 15, width: 70, height: 70 });
+        } catch (qrErr) {
+          console.warn("Could not embed QR code:", qrErr);
         }
 
-        page.drawText("Landlord Signature: ___________________", { x: 40, y: 300, size: 11, font: boldFont });
-        page.drawText("Tenant Signature: ___________________", { x: 340, y: 300, size: 11, font: boldFont });
+        // Thank you footer
+        page.drawText("Thank you for your business!", { x: 40, y: 60, size: 10, font: boldFont, color: primaryColor });
+        page.drawText("This invoice is digitally compiled via BharatPDF AI utility systems.", { x: 40, y: 45, size: 8, font, color: grayLine });
+
+      } else if (selectedTemplate === "rent") {
+        // Rent Agreement
+        page.drawRectangle({ x: 0, y: 831.89, width: 595.276, height: 10, color: primaryColor });
+
+        page.drawText("RESIDENTIAL RENT AGREEMENT", { x: 140, y: 780, size: 18, font: boldFont, color: primaryColor });
+        page.drawLine({ start: { x: 140, y: 772 }, end: { x: 455, y: 772 }, color: accentColor, thickness: 2 });
+
+        const preamble = `This Residential Rent Agreement is made and executed on this date at Mumbai, Maharashtra, by and between the Landlord, ${f.landlordName}, and the Tenant, ${f.tenantName}.`;
+        
+        let yPos = 730;
+        const preambleLines = wrapText(preamble, 515, 11);
+        for (const line of preambleLines) {
+          page.drawText(line, { x: 40, y: yPos, size: 11, font, color: textColor });
+          yPos -= 20;
+        }
+
+        // Sections
+        const sections = [
+          {
+            title: "1. PROPERTY DESCRIPTION",
+            body: `The Landlord hereby leases to the Tenant the residential property situated at: ${f.propertyAddress}. The property shall be used solely for private residential tenancy.`
+          },
+          {
+            title: "2. LEASE TERM & COMMENCEMENT",
+            body: `This lease is valid for an initial period of 11 months commencing on date: ${f.agreementStartDate}. Any renewal shall require fresh terms mutually agreed in writing.`
+          },
+          {
+            title: "3. RENT & SECURITY DEPOSIT",
+            body: `The Tenant agrees to pay the Landlord a monthly rent of INR ${f.monthlyRent} payable in advance on or before the 5th day of every calendar month. Additionally, the Tenant has deposited a refundable Security Deposit of INR ${f.securityDeposit} with the Landlord.`
+          },
+          {
+            title: "4. REPAIRS & COVENANTS",
+            body: "The Tenant shall maintain the premises in good and clean order, normal wear and tear excepted. The Tenant shall not perform structural modifications without the Landlord's written consent."
+          }
+        ];
+
+        for (const sec of sections) {
+          yPos -= 10;
+          page.drawText(sec.title, { x: 40, y: yPos, size: 11, font: boldFont, color: primaryColor });
+          yPos -= 18;
+          const bodyLines = wrapText(sec.body, 515, 10);
+          for (const line of bodyLines) {
+            page.drawText(line, { x: 40, y: yPos, size: 10, font, color: textColor });
+            yPos -= 18;
+          }
+        }
+
+        // Signature placeholders
+        yPos -= 40;
+        page.drawLine({ start: { x: 40, y: yPos }, end: { x: 555, y: yPos }, color: grayLine, thickness: 1 });
+        yPos -= 30;
+        page.drawText("IN WITNESS WHEREOF, the parties hereto sign below:", { x: 40, y: yPos, size: 10, font: boldFont });
+        
+        yPos -= 80;
+        page.drawText("_______________________________", { x: 40, y: yPos, size: 11, font });
+        page.drawText(`LANDLORD: ${f.landlordName}`, { x: 40, y: yPos - 15, size: 10, font: boldFont, color: primaryColor });
+
+        page.drawText("_______________________________", { x: 320, y: yPos, size: 11, font });
+        page.drawText(`TENANT: ${f.tenantName}`, { x: 320, y: yPos - 15, size: 10, font: boldFont, color: primaryColor });
 
       } else if (selectedTemplate === "resume") {
-        // Resume
-        page.drawText(f.resumeName, { x: 40, y: 780, size: 24, font: boldFont });
-        page.drawText(`${f.resumeTitle} | ${f.resumeEmail} | ${f.resumePhone}`, { x: 40, y: 755, size: 10, font });
+        // Resume Template
+        // Header background banner
+        page.drawRectangle({ x: 0, y: 741.89, width: 595.276, height: 100, color: primaryColor });
+        page.drawText(f.resumeName, { x: 40, y: 795, size: 24, font: boldFont, color: rgb(1,1,1) });
+        page.drawText(f.resumeTitle, { x: 40, y: 775, size: 12, font: boldFont, color: accentColor });
+        page.drawText(`${f.resumeEmail}  |  ${f.resumePhone}`, { x: 40, y: 755, size: 9, font, color: rgb(0.9,0.9,0.9) });
+
+        let yPos = 710;
+
+        // Summary Section
+        page.drawText("PROFESSIONAL SUMMARY", { x: 40, y: yPos, size: 12, font: boldFont, color: primaryColor });
+        page.drawLine({ start: { x: 40, y: yPos - 4 }, end: { x: 555, y: yPos - 4 }, color: accentColor, thickness: 1.5 });
+        yPos -= 22;
+
+        const sumLines = wrapText(f.resumeSummary, 515, 10);
+        for (const line of sumLines) {
+          page.drawText(line, { x: 40, y: yPos, size: 10, font, color: textColor });
+          yPos -= 16;
+        }
+
+        // Skills Section
+        yPos -= 15;
+        page.drawText("CORE SKILLS & TECHNOLOGIES", { x: 40, y: yPos, size: 12, font: boldFont, color: primaryColor });
+        page.drawLine({ start: { x: 40, y: yPos - 4 }, end: { x: 555, y: yPos - 4 }, color: accentColor, thickness: 1.5 });
+        yPos -= 22;
+
+        const skillLines = wrapText(f.resumeSkills, 515, 10);
+        for (const line of skillLines) {
+          page.drawText(line, { x: 40, y: yPos, size: 10, font, color: textColor });
+          yPos -= 16;
+        }
+
+        // Experience Section
+        yPos -= 15;
+        page.drawText("ACADEMIC & PROFESSIONAL PROJECTS", { x: 40, y: yPos, size: 12, font: boldFont, color: primaryColor });
+        page.drawLine({ start: { x: 40, y: yPos - 4 }, end: { x: 555, y: yPos - 4 }, color: accentColor, thickness: 1.5 });
         
-        page.drawLine({ start: { x: 40, y: 745 }, end: { x: 550, y: 745 }, thickness: 1 });
+        yPos -= 25;
+        page.drawText("Lead Engineering Sandbox Collaborator  |  Self-Employed", { x: 40, y: yPos, size: 11, font: boldFont });
+        page.drawText("2025 - Present", { x: 480, y: yPos, size: 10, font });
+        yPos -= 18;
+        const projectDesc = "Designed decentralized authentication protocols, document hashing networks, and secure storage containers. Implemented frontends using Next.js, and handled PDF metadata cleaning via canvas WASM engines.";
+        const descLines = wrapText(projectDesc, 515, 10);
+        for (const line of descLines) {
+          page.drawText(line, { x: 40, y: yPos, size: 10, font, color: textColor });
+          yPos -= 16;
+        }
 
-        page.drawText("Summary", { x: 40, y: 710, size: 14, font: boldFont });
-        let summaryY = 690;
-        const sumLines = f.resumeSummary.match(/.{1,80}(\s|$)/g) || [f.resumeSummary];
-        sumLines.forEach((line) => {
-          page.drawText(line.trim(), { x: 40, y: summaryY, size: 10, font });
-          summaryY -= 15;
-        });
-
-        summaryY -= 15;
-        page.drawText("Key Skills", { x: 40, y: summaryY, size: 14, font: boldFont });
-        summaryY -= 20;
-        page.drawText(f.resumeSkills, { x: 40, y: summaryY, size: 10, font });
-
-        summaryY -= 30;
-        page.drawText("Education & Certification", { x: 40, y: summaryY, size: 14, font: boldFont });
-        summaryY -= 20;
-        page.drawText("Bachelor of Technology (Computer Science) - India", { x: 40, y: summaryY, size: 10, font });
+        // Education Section
+        yPos -= 15;
+        page.drawText("EDUCATION & CERTIFICATIONS", { x: 40, y: yPos, size: 12, font: boldFont, color: primaryColor });
+        page.drawLine({ start: { x: 40, y: yPos - 4 }, end: { x: 555, y: yPos - 4 }, color: accentColor, thickness: 1.5 });
+        
+        yPos -= 25;
+        page.drawText("Bachelor of Technology in Computer Science", { x: 40, y: yPos, size: 11, font: boldFont });
+        page.drawText("Graduated: 2025", { x: 470, y: yPos, size: 10, font });
+        yPos -= 18;
+        page.drawText("Indian Institute of Technology / Local Affiliated University", { x: 40, y: yPos, size: 10, font, color: textColor });
 
       } else {
         // Offer Letter
-        page.drawText(f.offerCompany.toUpperCase(), { x: 40, y: 780, size: 18, font: boldFont });
-        page.drawText("OFFER LETTER OF INTERNSHIP", { x: 40, y: 730, size: 14, font: boldFont });
-        page.drawText(`Date: ${f.offerDate}`, { x: 40, y: 700, size: 10, font });
+        page.drawRectangle({ x: 0, y: 831.89, width: 595.276, height: 10, color: accentColor });
 
-        const letterText = `Dear ${f.offerCandidate},
+        // Letterhead design
+        page.drawText(f.offerCompany.toUpperCase(), { x: 40, y: 780, size: 18, font: boldFont, color: primaryColor });
+        page.drawText("POLKAVERSE SECURE COGNITIVE WORKSPACE SYSTEMS", { x: 40, y: 765, size: 9, font: boldFont, color: grayLine });
+        page.drawLine({ start: { x: 40, y: 755 }, end: { x: 555, y: 755 }, color: accentColor, thickness: 1.5 });
 
-We are pleased to offer you the position of ${f.offerRole} at ${f.offerCompany}.
+        let yPos = 720;
+        page.drawText("LETTER OF INTERNSHIP APPOINTMENT", { x: 170, y: yPos, size: 13, font: boldFont, color: primaryColor });
+        yPos -= 30;
 
-Details of the Offer:
-- Stipend/Salary: INR ${f.offerSalary} per month
-- Joining Date: ${f.offerDate}
-- Duration: 6 Months
+        const dateStr = new Date().toLocaleDateString("en-IN");
+        page.drawText(`Date: ${dateStr}`, { x: 40, y: yPos, size: 10, font });
+        yPos -= 30;
 
-During this period, you will be expected to work diligently on product engineering and document workflow APIs.
+        page.drawText(`Dear ${f.offerCandidate},`, { x: 40, y: yPos, size: 11, font: boldFont });
+        yPos -= 25;
 
-Welcome to the team!
-
-Sincerely,
-Managing Director
-${f.offerCompany}`;
-
-        let lineY = 660;
-        const letterLines = letterText.split("\n");
-        for (const line of letterLines) {
-          page.drawText(line, { x: 40, y: lineY, size: 11, font });
-          lineY -= 22;
+        const p1 = `We are pleased to offer you an internship position as "${f.offerRole}" at ${f.offerCompany}. This internship is designed to offer hands-on project engineering experience.`;
+        const p1Lines = wrapText(p1, 515, 11);
+        for (const line of p1Lines) {
+          page.drawText(line, { x: 40, y: yPos, size: 11, font, color: textColor });
+          yPos -= 20;
         }
+
+        yPos -= 15;
+        page.drawText("KEY INTERNSHIP TERMS:", { x: 40, y: yPos, size: 11, font: boldFont, color: primaryColor });
+        yPos -= 20;
+
+        const terms = [
+          `- Monthly Stipend: INR ${f.offerSalary} (fixed, inclusive of taxes)`,
+          `- Commencement Date: ${f.offerDate}`,
+          "- Internship Duration: 6 months",
+          "- Responsibility: Implement local PDF processing routines, eSign audit trails, and document automation modules."
+        ];
+
+        for (const t of terms) {
+          const tLines = wrapText(t, 515, 10);
+          for (const line of tLines) {
+            page.drawText(line, { x: 40, y: yPos, size: 10, font, color: textColor });
+            yPos -= 18;
+          }
+        }
+
+        yPos -= 15;
+        const p2 = "By signing below, you acknowledge and accept this internship offer. We look forward to having you join our secure document engineering division.";
+        const p2Lines = wrapText(p2, 515, 11);
+        for (const line of p2Lines) {
+          page.drawText(line, { x: 40, y: yPos, size: 11, font, color: textColor });
+          yPos -= 20;
+        }
+
+        yPos -= 70;
+        page.drawText("_______________________________", { x: 40, y: yPos, size: 11, font });
+        page.drawText("Managing Director", { x: 40, y: yPos - 15, size: 10, font: boldFont, color: primaryColor });
+        page.drawText(f.offerCompany, { x: 40, y: yPos - 30, size: 9, font });
+
+        page.drawText("_______________________________", { x: 320, y: yPos, size: 11, font });
+        page.drawText("Candidate Signature / Date", { x: 320, y: yPos - 15, size: 10, font: boldFont, color: primaryColor });
       }
 
       const generatedBytes = await pdf.save();
