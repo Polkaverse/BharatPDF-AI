@@ -23,26 +23,32 @@ import {
   ChevronRight,
   Eye,
   Type,
-  Edit2
+  Edit2,
+  Home
 } from "lucide-react";
 import { PDFDocument, degrees, rgb, StandardFonts } from "pdf-lib";
 import * as Tesseract from "tesseract.js";
 
-type TabId = "utilities" | "ocr" | "esign" | "templates" | "ai";
+type TabId = "dashboard" | "templates" | "utilities" | "esign" | "ocr" | "ai";
 
 type UtilityTask = "merge" | "split" | "rotate" | "compress";
 
 export function MvpShell() {
-  const [activeTab, setActiveTab] = useState<TabId>("utilities");
+  const [activeTab, setActiveTab] = useState<TabId>("dashboard");
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [processing, setProcessing] = useState(false);
   const [progress, setProgress] = useState<number | null>(null);
 
+  // --- Visual Page Helpers State ---
+  const [pdfPageCount, setPdfPageCount] = useState<number>(0);
+  const [selectedSplitPages, setSelectedSplitPages] = useState<number[]>([]); // 0-indexed page numbers
+  const [pageRotations, setPageRotations] = useState<Record<number, number>>({}); // page index -> rotation angle
+
   // --- PDF Utilities State ---
   const [utilityTask, setUtilityTask] = useState<UtilityTask>("merge");
   const [utilityFiles, setUtilityFiles] = useState<File[]>([]);
-  const [splitRanges, setSplitRanges] = useState<string>("1");
+  const [splitRanges, setSplitRanges] = useState<string>("");
   const [rotateAngle, setRotateAngle] = useState<number>(90);
   const [rotatePageTarget, setRotatePageTarget] = useState<string>("all"); // "all" or comma separated page numbers
   const [compressLevel, setCompressLevel] = useState<"low" | "medium" | "high">("medium");
@@ -55,6 +61,8 @@ export function MvpShell() {
 
   // --- eSign State ---
   const [esignFile, setEsignFile] = useState<File | null>(null);
+  const [esignPageCount, setEsignPageCount] = useState<number>(0);
+  const [esignPageRatio, setEsignPageRatio] = useState<number>(0.707);
   const [signType, setSignType] = useState<"draw" | "type" | "upload">("draw");
   const [typedName, setTypedName] = useState<string>("");
   const [typedFont, setTypedFont] = useState<string>("cursive");
@@ -188,6 +196,92 @@ export function MvpShell() {
       }
     }
   }, [signType, typedName, typedFont]);
+
+  const formatRanges = (pages: number[]): string => {
+    if (pages.length === 0) return "";
+    const sorted = [...pages].sort((a, b) => a - b);
+    const ranges: string[] = [];
+    let start = sorted[0];
+    let end = sorted[0];
+    
+    for (let i = 1; i < sorted.length; i++) {
+      if (sorted[i] === end + 1) {
+        end = sorted[i];
+      } else {
+        if (start === end) {
+          ranges.push(`${start + 1}`);
+        } else {
+          ranges.push(`${start + 1}-${end + 1}`);
+        }
+        start = sorted[i];
+        end = sorted[i];
+      }
+    }
+    if (start === end) {
+      ranges.push(`${start + 1}`);
+    } else {
+      ranges.push(`${start + 1}-${end + 1}`);
+    }
+    return ranges.join(", ");
+  };
+
+  const loadPdfMetadata = async (file: File) => {
+    try {
+      const buffer = await file.arrayBuffer();
+      const pdfDoc = await PDFDocument.load(buffer);
+      const pageCount = pdfDoc.getPageCount();
+      setPdfPageCount(pageCount);
+      
+      const initialRotations: Record<number, number> = {};
+      for (let i = 0; i < pageCount; i++) {
+        initialRotations[i] = pdfDoc.getPage(i).getRotation().angle;
+      }
+      setPageRotations(initialRotations);
+      setSelectedSplitPages([]);
+      setSplitRanges("");
+    } catch (err) {
+      console.error("Failed to load PDF metadata:", err);
+    }
+  };
+
+  const loadEsignPdfMetadata = async (file: File) => {
+    try {
+      const buffer = await file.arrayBuffer();
+      const pdfDoc = await PDFDocument.load(buffer);
+      const pageCount = pdfDoc.getPageCount();
+      setEsignPageCount(pageCount);
+      setSignPage(1);
+      
+      if (pageCount > 0) {
+        const page = pdfDoc.getPage(0);
+        const { width, height } = page.getSize();
+        setEsignPageRatio(width / height);
+      }
+    } catch (err) {
+      console.error("Failed to load eSign PDF metadata:", err);
+    }
+  };
+
+  // Sync PDF metadata on utility state changes
+  useEffect(() => {
+    if (utilityFiles[0] && utilityTask !== "merge") {
+      loadPdfMetadata(utilityFiles[0]);
+    } else {
+      setPdfPageCount(0);
+      setSelectedSplitPages([]);
+      setPageRotations({});
+    }
+  }, [utilityTask, utilityFiles]);
+
+  // Sync eSign PDF metadata on file change
+  useEffect(() => {
+    if (esignFile) {
+      loadEsignPdfMetadata(esignFile);
+    } else {
+      setEsignPageCount(0);
+      setEsignPageRatio(0.707);
+    }
+  }, [esignFile]);
 
   // Utility file handlers
   const addUtilityFiles = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -324,30 +418,12 @@ export function MvpShell() {
       const pdf = await PDFDocument.load(fileBytes);
       const pageCount = pdf.getPageCount();
 
-      const targetPages: number[] = [];
-      if (rotatePageTarget.toLowerCase() === "all") {
-        for (let i = 0; i < pageCount; i++) targetPages.push(i);
-      } else {
-        const parts = rotatePageTarget.split(",");
-        for (const p of parts) {
-          const val = parseInt(p.trim()) - 1;
-          if (!isNaN(val) && val >= 0 && val < pageCount) {
-            targetPages.push(val);
-          }
-        }
-      }
-
-      if (targetPages.length === 0) {
-        setError("No valid target pages for rotation found.");
-        setProcessing(false);
-        return;
-      }
-
       const pages = pdf.getPages();
-      for (const idx of targetPages) {
-        const page = pages[idx];
-        const currentRotation = page.getRotation().angle;
-        page.setRotation(degrees((currentRotation + rotateAngle) % 360));
+      for (let i = 0; i < pageCount; i++) {
+        if (pageRotations[i] !== undefined) {
+          const page = pages[i];
+          page.setRotation(degrees(pageRotations[i]));
+        }
       }
 
       const rotatedBytes = await pdf.save();
@@ -1047,755 +1123,958 @@ THE TENANT: Shri/Smt. ${f.tenantName}, hereinafter referred to as the "SECOND PA
         </div>
       </header>
 
-      <section className="hero-card">
-        {/* Left Side: Product Positioning */}
-        <div className="hero-copy">
-          <p className="eyebrow">Zero-Migration Utility</p>
-          <h1 style={{ fontSize: "2.8rem" }}>PDF Studio</h1>
-          <p className="lede">
-            Fully functional client-side PDF utility suite, multilingual OCR (English + Hindi/Tamil/Telugu), visual eSignature placement with audit certifications, and localized document templates.
-          </p>
+      <div className="workspace-container">
+        {/* Left Sidebar Navigation */}
+        <aside className="workspace-sidebar">
+          <div className="sidebar-group">
+            <span className="sidebar-group-title">General</span>
+            <button
+              onClick={() => setActiveTab("dashboard")}
+              className={`sidebar-item ${activeTab === "dashboard" ? "active" : ""}`}
+            >
+              <Home size={16} />
+              <span>Workspace Home</span>
+            </button>
+          </div>
 
-          <div style={{ marginTop: "2rem" }}>
-            <p className="section-kicker">Core System Architecture</p>
-            <div className="task-tabs" style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-              <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
-                <Check size={16} color="var(--ok)" />
-                <span style={{ fontSize: "0.9rem" }}>High-Performance PDF assembly & manipulation via `pdf-lib`</span>
+          <div className="sidebar-group">
+            <span className="sidebar-group-title">Create & Automate</span>
+            <button
+              onClick={() => setActiveTab("templates")}
+              className={`sidebar-item ${activeTab === "templates" ? "active" : ""}`}
+            >
+              <Plus size={16} />
+              <span>Document Creator</span>
+            </button>
+          </div>
+
+          <div className="sidebar-group">
+            <span className="sidebar-group-title">PDF Tools</span>
+            <button
+              onClick={() => setActiveTab("utilities")}
+              className={`sidebar-item ${activeTab === "utilities" ? "active" : ""}`}
+            >
+              <FileText size={16} />
+              <span>PDF Utilities</span>
+            </button>
+            <button
+              onClick={() => setActiveTab("esign")}
+              className={`sidebar-item ${activeTab === "esign" ? "active" : ""}`}
+            >
+              <FileCheck size={16} />
+              <span>Secure eSign</span>
+            </button>
+          </div>
+
+          <div className="sidebar-group">
+            <span className="sidebar-group-title">Intelligence</span>
+            <button
+              onClick={() => setActiveTab("ocr")}
+              className={`sidebar-item ${activeTab === "ocr" ? "active" : ""}`}
+            >
+              <Languages size={16} />
+              <span>Multilingual OCR</span>
+            </button>
+            <button
+              onClick={() => setActiveTab("ai")}
+              className={`sidebar-item ${activeTab === "ai" ? "active" : ""}`}
+            >
+              <Activity size={16} />
+              <span>AI Workflows</span>
+            </button>
+          </div>
+        </aside>
+
+        {/* Center / Right Workspace Panels */}
+        <div className="workspace-content">
+          {/* ALERT NOTIFICATIONS */}
+          {error && (
+            <div style={{ display: "flex", gap: "0.5rem", padding: "0.8rem", background: "rgba(220,53,69,0.1)", borderRadius: "10px", color: "#dc3545", fontSize: "0.9rem" }}>
+              <AlertCircle size={18} style={{ flexShrink: 0 }} />
+              <span>{error}</span>
+            </div>
+          )}
+          {success && (
+            <div style={{ display: "flex", gap: "0.5rem", padding: "0.8rem", background: "rgba(40,167,69,0.1)", borderRadius: "10px", color: "var(--ok)", fontSize: "0.9rem" }}>
+              <Check size={18} style={{ flexShrink: 0 }} />
+              <span>{success}</span>
+            </div>
+          )}
+
+          {/* TAB 0: DASHBOARD */}
+          {activeTab === "dashboard" && (
+            <div className="dashboard-welcome">
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "1rem" }}>
+                <div>
+                  <span className="eyebrow">Interactive Workspace</span>
+                  <h1 style={{ fontSize: "2.4rem", margin: "0 0 0.5rem 0", color: "var(--text)" }}>PDF Studio Dashboard</h1>
+                  <p className="subtitle" style={{ fontSize: "1.1rem", color: "var(--muted)", margin: "0 0 1.5rem 0" }}>
+                    Empowering Indian MSMEs and professionals with high-performance, private, client-side PDF automation and smart AI workflows.
+                  </p>
+                </div>
+                <span className="status-pill scanned" style={{ fontWeight: 700 }}>Online & Secure</span>
               </div>
-              <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
-                <Check size={16} color="var(--ok)" />
-                <span style={{ fontSize: "0.9rem" }}>Offline-first OCR client using Tesseract compiled WASM</span>
-              </div>
-              <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
-                <Check size={16} color="var(--ok)" />
-                <span style={{ fontSize: "0.9rem" }}>Auto-generated tamper-evident IT Act 2000 Audit certificates</span>
+
+              <div className="dashboard-cards" style={{ marginTop: "1rem" }}>
+                <button
+                  onClick={() => setActiveTab("templates")}
+                  className="dashboard-card"
+                >
+                  <div>
+                    <div className="dashboard-card-header">
+                      <div className="dashboard-card-icon"><Plus size={18} /></div>
+                      <h3>Document Creator</h3>
+                    </div>
+                    <p>Generate GST-compliant invoices, rent agreements, professional student resumes, and HR offer letters in seconds.</p>
+                  </div>
+                  <div className="dashboard-card-footer">
+                    Start Creating <ChevronRight size={14} />
+                  </div>
+                </button>
+
+                <button
+                  onClick={() => setActiveTab("utilities")}
+                  className="dashboard-card"
+                >
+                  <div>
+                    <div className="dashboard-card-header">
+                      <div className="dashboard-card-icon"><FileText size={18} /></div>
+                      <h3>PDF Utilities</h3>
+                    </div>
+                    <p>Perform key operations: merge multiple PDFs, visually split pages, rotate pages individually, or compress file sizes.</p>
+                  </div>
+                    <div className="dashboard-card-footer">
+                      Open PDF Tools <ChevronRight size={14} />
+                    </div>
+                </button>
+
+                <button
+                  onClick={() => setActiveTab("esign")}
+                  className="dashboard-card"
+                >
+                  <div>
+                    <div className="dashboard-card-header">
+                      <div className="dashboard-card-icon"><FileCheck size={18} /></div>
+                      <h3>Secure eSign</h3>
+                    </div>
+                    <p>Draw or type signatures, place them visually on any page, and generate secure documents with an IT Act 2000 Audit Certificate.</p>
+                  </div>
+                  <div className="dashboard-card-footer">
+                    Sign Document <ChevronRight size={14} />
+                  </div>
+                </button>
+
+                <button
+                  onClick={() => setActiveTab("ocr")}
+                  className="dashboard-card"
+                >
+                  <div>
+                    <div className="dashboard-card-header">
+                      <div className="dashboard-card-icon"><Languages size={18} /></div>
+                      <h3>Document Intelligence</h3>
+                    </div>
+                    <p>Extract text from scans/images (English + Hindi/Tamil/Telugu) or summarize and translate documents with AI workflows.</p>
+                  </div>
+                  <div className="dashboard-card-footer">
+                    Run AI & OCR <ChevronRight size={14} />
+                  </div>
+                </button>
               </div>
             </div>
-          </div>
-        </div>
+          )}
 
-        {/* Right Side: Interactive Panel */}
-        <div className="hero-panel">
-          {/* Main Module Tabs */}
-          <div className="task-tabs" role="tablist" style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: "4px" }}>
-            {[
-              { id: "utilities", label: "PDF Tools", icon: FileText },
-              { id: "ocr", label: "OCR", icon: Languages },
-              { id: "esign", label: "eSign", icon: FileCheck },
-              { id: "templates", label: "Templates", icon: Plus },
-              { id: "ai", label: "AI Workflows", icon: Activity }
-            ].map((tab) => {
-              const Icon = tab.icon;
-              return (
-                <button
-                  key={tab.id}
-                  type="button"
-                  role="tab"
-                  aria-selected={activeTab === tab.id}
-                  className={activeTab === tab.id ? "task-tab active" : "task-tab"}
-                  style={{ display: "flex", flexDirection: "column", alignItems: "center", fontSize: "0.75rem", padding: "0.6rem 0.2rem", borderRadius: "10px" }}
-                  onClick={() => {
-                    setActiveTab(tab.id as TabId);
-                    setError(null);
-                    setSuccess(null);
-                  }}
-                >
-                  <Icon size={16} style={{ marginBottom: "4px" }} />
-                  {tab.label}
-                </button>
-              );
-            })}
-          </div>
-
-          {/* Module Viewports */}
-          <div className="upload-panel" style={{ marginTop: "1rem" }}>
-            
-            {/* ALERT NOTIFICATIONS */}
-            {error && (
-              <div style={{ display: "flex", gap: "0.5rem", padding: "0.8rem", background: "rgba(220,53,69,0.1)", borderRadius: "10px", color: "#dc3545", fontSize: "0.9rem" }}>
-                <AlertCircle size={18} style={{ flexShrink: 0 }} />
-                <span>{error}</span>
-              </div>
-            )}
-            {success && (
-              <div style={{ display: "flex", gap: "0.5rem", padding: "0.8rem", background: "rgba(40,167,69,0.1)", borderRadius: "10px", color: "var(--ok)", fontSize: "0.9rem" }}>
-                <Check size={18} style={{ flexShrink: 0 }} />
-                <span>{success}</span>
-              </div>
-            )}
-
-            {/* TAB 1: PDF UTILITIES */}
-            {activeTab === "utilities" && (
-              <div>
-                <div style={{ display: "flex", gap: "0.5rem", marginBottom: "1rem" }}>
-                  {(["merge", "split", "rotate", "compress"] as UtilityTask[]).map((task) => (
-                    <button
-                      key={task}
-                      onClick={() => setUtilityTask(task)}
-                      className={utilityTask === task ? "segment active" : "segment"}
-                      style={{ fontSize: "0.8rem", padding: "0.4rem 0.8rem" }}
-                    >
-                      {task.toUpperCase()}
-                    </button>
-                  ))}
-                </div>
-
-                <div className="file-picker">
-                  <span>Upload Files for {utilityTask.toUpperCase()}</span>
-                  <input
-                    type="file"
-                    multiple={utilityTask === "merge"}
-                    accept=".pdf"
-                    onChange={addUtilityFiles}
-                  />
-                </div>
-
-                {utilityFiles.length > 0 && (
-                  <div style={{ marginTop: "1rem" }}>
-                    <p style={{ fontWeight: "bold", fontSize: "0.85rem" }}>Queue ({utilityFiles.length} files):</p>
-                    <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
-                      {utilityFiles.map((file, idx) => (
-                        <div key={idx} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "#fff", padding: "0.5rem 0.8rem", borderRadius: "8px", border: "1px solid #eee" }}>
-                          <span style={{ fontSize: "0.85rem", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "200px" }}>
-                            {idx + 1}. {file.name} ({(file.size / 1024).toFixed(1)} KB)
-                          </span>
-                          <div style={{ display: "flex", gap: "4px" }}>
-                            {utilityTask === "merge" && (
-                              <>
-                                <button onClick={() => moveUtilityFile(idx, "up")} style={{ padding: "0.2rem" }} disabled={idx === 0}><ArrowUp size={14} /></button>
-                                <button onClick={() => moveUtilityFile(idx, "down")} style={{ padding: "0.2rem" }} disabled={idx === utilityFiles.length - 1}><ArrowDown size={14} /></button>
-                              </>
-                            )}
-                            <button onClick={() => removeUtilityFile(idx)} style={{ color: "#dc3545", padding: "0.2rem" }}><Trash size={14} /></button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
+          {/* ACTIVE WORKSPACE PANEL (For active tabs) */}
+          {activeTab !== "dashboard" && (
+            <div className="upload-panel">
+              
+              {/* TAB 1: PDF UTILITIES */}
+              {activeTab === "utilities" && (
+                <div>
+                  <div style={{ display: "flex", gap: "0.5rem", marginBottom: "1rem" }}>
+                    {(["merge", "split", "rotate", "compress"] as UtilityTask[]).map((task) => (
+                      <button
+                        key={task}
+                        onClick={() => setUtilityTask(task)}
+                        className={utilityTask === task ? "segment active" : "segment"}
+                        style={{ fontSize: "0.8rem", padding: "0.4rem 0.8rem" }}
+                      >
+                        {task.toUpperCase()}
+                      </button>
+                    ))}
                   </div>
-                )}
 
-                {/* Subtask Form Fields */}
-                {utilityTask === "split" && (
-                  <div style={{ marginTop: "1rem" }}>
-                    <label style={{ fontSize: "0.85rem", color: "var(--muted)" }}>Pages to Extract (e.g., 1-3, 5):</label>
+                  <div className="file-picker">
+                    <span>Upload Files for {utilityTask.toUpperCase()}</span>
                     <input
-                      type="text"
-                      className="template-form"
-                      style={{ width: "100%", padding: "0.6rem", border: "1px solid #ccc", borderRadius: "8px", marginTop: "4px" }}
-                      value={splitRanges}
-                      onChange={(e) => setSplitRanges(e.target.value)}
+                      type="file"
+                      multiple={utilityTask === "merge"}
+                      accept=".pdf"
+                      onChange={addUtilityFiles}
                     />
                   </div>
-                )}
 
-                {utilityTask === "rotate" && (
-                  <div style={{ marginTop: "1rem", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.5rem" }}>
-                    <div>
-                      <label style={{ fontSize: "0.85rem", color: "var(--muted)" }}>Angle:</label>
-                      <select
-                        style={{ width: "100%", padding: "0.6rem", border: "1px solid #ccc", borderRadius: "8px", marginTop: "4px" }}
-                        value={rotateAngle}
-                        onChange={(e) => setRotateAngle(parseInt(e.target.value))}
-                      >
-                        <option value={90}>90° Clockwise</option>
-                        <option value={180}>180° Flip</option>
-                        <option value={270}>270° Counter-Clockwise</option>
-                      </select>
+                  {utilityFiles.length > 0 && (
+                    <div style={{ marginTop: "1rem" }}>
+                      <p style={{ fontWeight: "bold", fontSize: "0.85rem" }}>Queue ({utilityFiles.length} files):</p>
+                      <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+                        {utilityFiles.map((file, idx) => (
+                          <div key={idx} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "#fff", padding: "0.5rem 0.8rem", borderRadius: "8px", border: "1px solid #eee" }}>
+                            <span style={{ fontSize: "0.85rem", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "200px" }}>
+                              {idx + 1}. {file.name} ({(file.size / 1024).toFixed(1)} KB)
+                            </span>
+                            <div style={{ display: "flex", gap: "4px" }}>
+                              {utilityTask === "merge" && (
+                                <>
+                                  <button onClick={() => moveUtilityFile(idx, "up")} style={{ padding: "0.2rem" }} disabled={idx === 0}><ArrowUp size={14} /></button>
+                                  <button onClick={() => moveUtilityFile(idx, "down")} style={{ padding: "0.2rem" }} disabled={idx === utilityFiles.length - 1}><ArrowDown size={14} /></button>
+                                </>
+                              )}
+                              <button onClick={() => removeUtilityFile(idx)} style={{ color: "#dc3545", padding: "0.2rem" }}><Trash size={14} /></button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                    <div>
-                      <label style={{ fontSize: "0.85rem", color: "var(--muted)" }}>Pages (All or e.g., 1, 3):</label>
+                  )}
+
+                  {/* Visual Helpers for Split */}
+                  {pdfPageCount > 0 && utilityTask === "split" && (
+                    <div style={{ marginTop: "1.2rem", borderTop: "1px solid #eee", paddingTop: "1rem" }}>
+                      <label style={{ fontSize: "0.85rem", color: "var(--muted)", fontWeight: "bold" }}>
+                        Select Pages to Extract visually:
+                      </label>
+                      <div className="page-grid" style={{ maxHeight: "250px", overflowY: "auto", padding: "0.5rem 0.1rem" }}>
+                        {Array.from({ length: pdfPageCount }).map((_, i) => {
+                          const isSelected = selectedSplitPages.includes(i);
+                          return (
+                            <div
+                              key={i}
+                              onClick={() => {
+                                let newSelection;
+                                if (isSelected) {
+                                  newSelection = selectedSplitPages.filter((p) => p !== i);
+                                } else {
+                                  newSelection = [...selectedSplitPages, i].sort((a, b) => a - b);
+                                }
+                                setSelectedSplitPages(newSelection);
+                                setSplitRanges(formatRanges(newSelection));
+                              }}
+                              className={`page-card ${isSelected ? "selected" : ""}`}
+                            >
+                              <div className="page-card-checkbox">
+                                {isSelected && <Check size={10} />}
+                              </div>
+                              <FileText size={24} style={{ opacity: isSelected ? 1 : 0.4, margin: "auto 0" }} />
+                              <span className="page-card-number">Page {i + 1}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Subtask Form Fields */}
+                  {utilityTask === "split" && (
+                    <div style={{ marginTop: "1rem" }}>
+                      <label style={{ fontSize: "0.85rem", color: "var(--muted)" }}>Pages to Extract (Range String):</label>
                       <input
                         type="text"
+                        className="template-form"
                         style={{ width: "100%", padding: "0.6rem", border: "1px solid #ccc", borderRadius: "8px", marginTop: "4px" }}
-                        value={rotatePageTarget}
-                        onChange={(e) => setRotatePageTarget(e.target.value)}
+                        value={splitRanges}
+                        onChange={(e) => setSplitRanges(e.target.value)}
+                        placeholder="e.g., 1-3, 5"
                       />
                     </div>
-                  </div>
-                )}
+                  )}
 
-                {utilityTask === "compress" && (
+                  {/* Visual Helpers for Rotate */}
+                  {pdfPageCount > 0 && utilityTask === "rotate" && (
+                    <div style={{ marginTop: "1.2rem", borderTop: "1px solid #eee", paddingTop: "1rem" }}>
+                      <label style={{ fontSize: "0.85rem", color: "var(--muted)", fontWeight: "bold" }}>
+                        Click Pages to Rotate visually (90° steps):
+                      </label>
+                      <div className="page-grid" style={{ maxHeight: "250px", overflowY: "auto", padding: "0.5rem 0.1rem" }}>
+                        {Array.from({ length: pdfPageCount }).map((_, i) => {
+                          const rotation = pageRotations[i] || 0;
+                          return (
+                            <div
+                              key={i}
+                              onClick={() => {
+                                const nextRotation = (rotation + 90) % 360;
+                                setPageRotations({
+                                  ...pageRotations,
+                                  [i]: nextRotation
+                                });
+                              }}
+                              className="page-card"
+                            >
+                              <div
+                                style={{
+                                  transform: `rotate(${rotation}deg)`,
+                                  transition: "transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
+                                  margin: "auto 0"
+                                }}
+                              >
+                                <FileText size={24} style={{ color: rotation !== 0 ? "var(--accent)" : "inherit" }} />
+                              </div>
+                              <span className="page-card-number">Page {i + 1}</span>
+                              <span style={{ fontSize: "0.65rem", color: "var(--muted)", fontWeight: 700 }}>{rotation}°</span>
+                              <RotateCw size={10} style={{ position: "absolute", bottom: "8px", right: "8px", opacity: 0.5 }} />
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {utilityTask === "compress" && (
+                    <div style={{ marginTop: "1rem" }}>
+                      <label style={{ fontSize: "0.85rem", color: "var(--muted)" }}>Target Quality:</label>
+                      <div style={{ display: "flex", gap: "0.5rem", marginTop: "4px" }}>
+                        {["low", "medium", "high"].map((level) => (
+                          <button
+                            key={level}
+                            className={compressLevel === level ? "segment active" : "segment"}
+                            style={{ padding: "0.4rem 0.8rem", fontSize: "0.85rem", flex: 1 }}
+                            onClick={() => setCompressLevel(level as any)}
+                          >
+                            {level.toUpperCase()}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  <button
+                    onClick={
+                      utilityTask === "merge" ? handleMergePdf :
+                      utilityTask === "split" ? handleSplitPdf :
+                      utilityTask === "rotate" ? handleRotatePdf : handleCompressPdf
+                    }
+                    className="primary-cta"
+                    style={{ width: "100%", marginTop: "1.5rem" }}
+                    disabled={processing || utilityFiles.length === 0}
+                  >
+                    {processing ? "Processing..." : `Execute ${utilityTask.toUpperCase()}`}
+                  </button>
+                </div>
+              )}
+
+              {/* TAB 2: INDIAN OCR */}
+              {activeTab === "ocr" && (
+                <div>
+                  <div className="file-picker">
+                    <span>Choose Image or PDF Document</span>
+                    <input
+                      type="file"
+                      accept="image/*,application/pdf"
+                      onChange={(e) => setOcrFile(e.target.files?.[0] || null)}
+                    />
+                  </div>
+
                   <div style={{ marginTop: "1rem" }}>
-                    <label style={{ fontSize: "0.85rem", color: "var(--muted)" }}>Target Quality:</label>
-                    <div style={{ display: "flex", gap: "0.5rem", marginTop: "4px" }}>
-                      {["low", "medium", "high"].map((level) => (
+                    <label style={{ fontSize: "0.85rem", color: "var(--muted)" }}>OCR Engine Target Language:</label>
+                    <select
+                      style={{ width: "100%", padding: "0.6rem", border: "1px solid #ccc", borderRadius: "8px", marginTop: "4px" }}
+                      value={ocrLang}
+                      onChange={(e) => setOcrLang(e.target.value)}
+                    >
+                      <option value="eng+hin">English + Hindi (Devanagari)</option>
+                      <option value="eng+tam">English + Tamil</option>
+                      <option value="eng+tel">English + Telugu</option>
+                      <option value="eng">English Only</option>
+                    </select>
+                  </div>
+
+                  {ocrProgress && (
+                    <div style={{ marginTop: "1rem", display: "flex", gap: "0.5rem", alignItems: "center" }}>
+                      <div className="status-pill uploading" style={{ fontSize: "0.75rem" }}>OCR Process</div>
+                      <span style={{ fontSize: "0.85rem" }}>{ocrProgress}</span>
+                    </div>
+                  )}
+
+                  <button
+                    onClick={handleOcr}
+                    className="primary-cta"
+                    style={{ width: "100%", marginTop: "1rem" }}
+                    disabled={processing || !ocrFile}
+                  >
+                    {processing ? "Recognizing Text..." : "Extract Text"}
+                  </button>
+
+                  {ocrText && (
+                    <div style={{ marginTop: "1.5rem" }} className="ocr-editor">
+                      <p style={{ fontWeight: "bold", fontSize: "0.85rem", marginBottom: "0.5rem" }}>Recognized Content:</p>
+                      <textarea
+                        value={ocrText}
+                        onChange={(e) => setOcrText(e.target.value)}
+                        style={{ fontSize: "0.9rem" }}
+                      />
+                      <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.5rem" }}>
                         <button
-                          key={level}
-                          className={compressLevel === level ? "segment active" : "segment"}
-                          style={{ padding: "0.4rem 0.8rem", fontSize: "0.85rem", flex: 1 }}
-                          onClick={() => setCompressLevel(level as any)}
+                          onClick={() => {
+                            navigator.clipboard.writeText(ocrText);
+                            setSuccess("Copied to Clipboard!");
+                          }}
+                          className="secondary-cta"
+                          style={{ flex: 1, padding: "0.5rem" }}
                         >
-                          {level.toUpperCase()}
+                          Copy Text
+                        </button>
+                        <button
+                          onClick={() => downloadBytes(new TextEncoder().encode(ocrText), "ocr_result.txt", "text/plain")}
+                          className="secondary-cta"
+                          style={{ flex: 1, padding: "0.5rem" }}
+                        >
+                          Download TXT
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* TAB 3: eSIGN */}
+              {activeTab === "esign" && (
+                <div>
+                  <div className="file-picker">
+                    <span>Upload Document to Sign</span>
+                    <input
+                      type="file"
+                      accept=".pdf"
+                      onChange={(e) => setEsignFile(e.target.files?.[0] || null)}
+                    />
+                  </div>
+
+                  <div style={{ marginTop: "1rem" }}>
+                    <label style={{ fontSize: "0.85rem", color: "var(--muted)" }}>Signature Source:</label>
+                    <div style={{ display: "flex", gap: "0.5rem", marginTop: "4px" }}>
+                      {(["draw", "type"] as const).map((mode) => (
+                        <button
+                          key={mode}
+                          className={signType === mode ? "segment active" : "segment"}
+                          style={{ padding: "0.4rem 0.8rem", fontSize: "0.85rem", flex: 1 }}
+                          onClick={() => setSignType(mode)}
+                        >
+                          {mode.toUpperCase()}
                         </button>
                       ))}
                     </div>
                   </div>
-                )}
 
-                <button
-                  onClick={
-                    utilityTask === "merge" ? handleMergePdf :
-                    utilityTask === "split" ? handleSplitPdf :
-                    utilityTask === "rotate" ? handleRotatePdf : handleCompressPdf
-                  }
-                  className="primary-cta"
-                  style={{ width: "100%", marginTop: "1.5rem" }}
-                  disabled={processing || utilityFiles.length === 0}
-                >
-                  {processing ? "Processing..." : `Execute ${utilityTask.toUpperCase()}`}
-                </button>
-              </div>
-            )}
-
-            {/* TAB 2: INDIAN OCR */}
-            {activeTab === "ocr" && (
-              <div>
-                <div className="file-picker">
-                  <span>Choose Image or PDF Document</span>
-                  <input
-                    type="file"
-                    accept="image/*,application/pdf"
-                    onChange={(e) => setOcrFile(e.target.files?.[0] || null)}
-                  />
-                </div>
-
-                <div style={{ marginTop: "1rem" }}>
-                  <label style={{ fontSize: "0.85rem", color: "var(--muted)" }}>OCR Engine Target Language:</label>
-                  <select
-                    style={{ width: "100%", padding: "0.6rem", border: "1px solid #ccc", borderRadius: "8px", marginTop: "4px" }}
-                    value={ocrLang}
-                    onChange={(e) => setOcrLang(e.target.value)}
-                  >
-                    <option value="eng+hin">English + Hindi (Devanagari)</option>
-                    <option value="eng+tam">English + Tamil</option>
-                    <option value="eng+tel">English + Telugu</option>
-                    <option value="eng">English Only</option>
-                  </select>
-                </div>
-
-                {ocrProgress && (
-                  <div style={{ marginTop: "1rem", display: "flex", gap: "0.5rem", alignItems: "center" }}>
-                    <div className="status-pill uploading" style={{ fontSize: "0.75rem" }}>OCR Process</div>
-                    <span style={{ fontSize: "0.85rem" }}>{ocrProgress}</span>
-                  </div>
-                )}
-
-                <button
-                  onClick={handleOcr}
-                  className="primary-cta"
-                  style={{ width: "100%", marginTop: "1rem" }}
-                  disabled={processing || !ocrFile}
-                >
-                  {processing ? "Recognizing Text..." : "Extract Text"}
-                </button>
-
-                {ocrText && (
-                  <div style={{ marginTop: "1.5rem" }} className="ocr-editor">
-                    <p style={{ fontWeight: "bold", fontSize: "0.85rem", marginBottom: "0.5rem" }}>Recognized Content:</p>
-                    <textarea
-                      value={ocrText}
-                      onChange={(e) => setOcrText(e.target.value)}
-                      style={{ fontSize: "0.9rem" }}
-                    />
-                    <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.5rem" }}>
-                      <button
-                        onClick={() => {
-                          navigator.clipboard.writeText(ocrText);
-                          setSuccess("Copied to Clipboard!");
-                        }}
-                        className="secondary-cta"
-                        style={{ flex: 1, padding: "0.5rem" }}
-                      >
-                        Copy Text
-                      </button>
-                      <button
-                        onClick={() => downloadBytes(new TextEncoder().encode(ocrText), "ocr_result.txt", "text/plain")}
-                        className="secondary-cta"
-                        style={{ flex: 1, padding: "0.5rem" }}
-                      >
-                        Download TXT
+                  {signType === "draw" && (
+                    <div style={{ marginTop: "1rem" }}>
+                      <label style={{ fontSize: "0.85rem", color: "var(--muted)" }}>Draw Signature inside Box:</label>
+                      <canvas
+                        ref={canvasRef}
+                        width={400}
+                        height={150}
+                        onMouseDown={startDrawing}
+                        onMouseMove={draw}
+                        onMouseUp={stopDrawing}
+                        onMouseLeave={stopDrawing}
+                        style={{ border: "1px dashed #777", borderRadius: "10px", background: "#fff", display: "block", marginTop: "4px", cursor: "crosshair", width: "100%" }}
+                      />
+                      <button onClick={clearCanvas} className="secondary-cta" style={{ fontSize: "0.8rem", padding: "0.3rem 0.6rem", marginTop: "4px", width: "100%" }}>
+                        Clear Drawing Board
                       </button>
                     </div>
-                  </div>
-                )}
-              </div>
-            )}
+                  )}
 
-            {/* TAB 3: eSIGN */}
-            {activeTab === "esign" && (
-              <div>
-                <div className="file-picker">
-                  <span>Upload Document to Sign</span>
-                  <input
-                    type="file"
-                    accept=".pdf"
-                    onChange={(e) => setEsignFile(e.target.files?.[0] || null)}
-                  />
-                </div>
+                  {signType === "type" && (
+                    <div style={{ marginTop: "1rem", display: "grid", gap: "0.5rem" }}>
+                      <div>
+                        <label style={{ fontSize: "0.85rem", color: "var(--muted)" }}>Full Name:</label>
+                        <input
+                          type="text"
+                          placeholder="John Doe"
+                          value={typedName}
+                          onChange={(e) => setTypedName(e.target.value)}
+                          style={{ width: "100%", padding: "0.6rem", border: "1px solid #ccc", borderRadius: "8px", marginTop: "4px" }}
+                        />
+                      </div>
+                      <div>
+                        <label style={{ fontSize: "0.85rem", color: "var(--muted)" }}>Font Style:</label>
+                        <select
+                          value={typedFont}
+                          onChange={(e) => setTypedFont(e.target.value)}
+                          style={{ width: "100%", padding: "0.6rem", border: "1px solid #ccc", borderRadius: "8px", marginTop: "4px" }}
+                        >
+                          <option value="cursive">Cursive Cursive</option>
+                          <option value="formal">Elegant Serif</option>
+                        </select>
+                      </div>
+                    </div>
+                  )}
 
-                <div style={{ marginTop: "1rem" }}>
-                  <label style={{ fontSize: "0.85rem", color: "var(--muted)" }}>Signature Source:</label>
-                  <div style={{ display: "flex", gap: "0.5rem", marginTop: "4px" }}>
-                    {(["draw", "type"] as const).map((mode) => (
-                      <button
-                        key={mode}
-                        className={signType === mode ? "segment active" : "segment"}
-                        style={{ padding: "0.4rem 0.8rem", fontSize: "0.85rem", flex: 1 }}
-                        onClick={() => setSignType(mode)}
-                      >
-                        {mode.toUpperCase()}
-                      </button>
-                    ))}
-                  </div>
-                </div>
+                  {signatureImage && (
+                    <div style={{ marginTop: "1rem", padding: "0.5rem", border: "1px solid #ddd", borderRadius: "8px", background: "#fff" }}>
+                      <span style={{ fontSize: "0.75rem", color: "var(--muted)" }}>Signature Preview:</span>
+                      <img src={signatureImage} alt="signature" style={{ display: "block", maxHeight: "60px", margin: "auto" }} />
+                    </div>
+                  )}
 
-                {signType === "draw" && (
+                  {/* Placement parameters with interactive visual click helper */}
+                  {esignFile && esignPageCount > 0 && (
+                    <div style={{ marginTop: "1.2rem", borderTop: "1px solid #eee", paddingTop: "1rem" }}>
+                      <label style={{ fontSize: "0.85rem", color: "var(--muted)", fontWeight: "bold" }}>
+                        Visual Placement Preview (Click to Place Signature):
+                      </label>
+                      <div style={{ display: "flex", justifyContent: "center", margin: "0.75rem 0" }}>
+                        <div
+                          onClick={(e) => {
+                            const rect = e.currentTarget.getBoundingClientRect();
+                            const clickX = e.clientX - rect.left;
+                            const clickY = e.clientY - rect.top;
+                            const percentX = Math.round((clickX / rect.width) * 100);
+                            const percentY = Math.round(100 - (clickY / rect.height) * 100);
+                            setSignX(percentX);
+                            setSignY(percentY);
+                          }}
+                          style={{
+                            position: "relative",
+                            width: "200px",
+                            height: `${200 / esignPageRatio}px`,
+                            border: "1px solid rgba(61, 42, 30, 0.18)",
+                            borderRadius: "8px",
+                            background: "#ffffff",
+                            boxShadow: "0 4px 16px rgba(84, 49, 28, 0.06)",
+                            cursor: "crosshair",
+                            overflow: "hidden"
+                          }}
+                        >
+                          {/* Simulated lines on the preview page */}
+                          <div style={{ padding: "12px", height: "100%", display: "flex", flexDirection: "column", gap: "6px", opacity: 0.08 }}>
+                            <div style={{ height: "10px", background: "#000", width: "40%", borderRadius: "2px" }}></div>
+                            <div style={{ height: "6px", background: "#000", width: "90%", borderRadius: "1px" }}></div>
+                            <div style={{ height: "6px", background: "#000", width: "85%", borderRadius: "1px" }}></div>
+                            <div style={{ height: "6px", background: "#000", width: "70%", borderRadius: "1px" }}></div>
+                            <div style={{ height: "6px", background: "#000", width: "95%", borderRadius: "1px" }}></div>
+                            <div style={{ height: "10px", background: "#000", width: "25%", marginTop: "auto", alignSelf: "flex-end", borderRadius: "2px" }}></div>
+                          </div>
+
+                          {/* Float Preview Signature */}
+                          {signatureImage && (
+                            <div
+                              style={{
+                                position: "absolute",
+                                left: `${signX}%`,
+                                bottom: `${signY}%`,
+                                transform: "translate(-50%, 50%)",
+                                border: "1px dashed var(--accent)",
+                                background: "rgba(201, 77, 33, 0.12)",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                width: `${(signWidth / 595) * 200}px`,
+                                height: `${(signHeight / 841) * (200 / esignPageRatio)}px`,
+                                pointerEvents: "none"
+                              }}
+                            >
+                              <img
+                                src={signatureImage}
+                                alt="signature indicator"
+                                style={{ width: "100%", height: "100%", objectFit: "contain" }}
+                              />
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "0.4rem" }}>
+                        <div>
+                          <label style={{ fontSize: "0.75rem" }}>Page #</label>
+                          <input
+                            type="number"
+                            min={1}
+                            max={esignPageCount}
+                            value={signPage}
+                            onChange={(e) => setSignPage(Math.max(1, Math.min(esignPageCount, parseInt(e.target.value) || 1)))}
+                            style={{ width: "100%", padding: "0.4rem" }}
+                          />
+                        </div>
+                        <div>
+                          <label style={{ fontSize: "0.75rem" }}>X Position (%)</label>
+                          <input
+                            type="number"
+                            min={0}
+                            max={100}
+                            value={signX}
+                            onChange={(e) => setSignX(Math.max(0, Math.min(100, parseInt(e.target.value) || 0)))}
+                            style={{ width: "100%", padding: "0.4rem" }}
+                          />
+                        </div>
+                        <div>
+                          <label style={{ fontSize: "0.75rem" }}>Y Position (%)</label>
+                          <input
+                            type="number"
+                            min={0}
+                            max={100}
+                            value={signY}
+                            onChange={(e) => setSignY(Math.max(0, Math.min(100, parseInt(e.target.value) || 0)))}
+                            style={{ width: "100%", padding: "0.4rem" }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Signer Identity fields */}
                   <div style={{ marginTop: "1rem" }}>
-                    <label style={{ fontSize: "0.85rem", color: "var(--muted)" }}>Draw Signature inside Box:</label>
-                    <canvas
-                      ref={canvasRef}
-                      width={400}
-                      height={150}
-                      onMouseDown={startDrawing}
-                      onMouseMove={draw}
-                      onMouseUp={stopDrawing}
-                      onMouseLeave={stopDrawing}
-                      style={{ border: "1px dashed #777", borderRadius: "10px", background: "#fff", display: "block", marginTop: "4px", cursor: "crosshair", width: "100%" }}
-                    />
-                    <button onClick={clearCanvas} className="secondary-cta" style={{ fontSize: "0.8rem", padding: "0.3rem 0.6rem", marginTop: "4px", width: "100%" }}>
-                      Clear Drawing Board
-                    </button>
-                  </div>
-                )}
-
-                {signType === "type" && (
-                  <div style={{ marginTop: "1rem", display: "grid", gap: "0.5rem" }}>
-                    <div>
-                      <label style={{ fontSize: "0.85rem", color: "var(--muted)" }}>Full Name:</label>
+                    <p style={{ fontWeight: "bold", fontSize: "0.85rem", marginBottom: "0.5rem" }}>Audit Authentication Details:</p>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.5rem" }}>
+                      <input
+                        type="email"
+                        placeholder="Signer Email"
+                        value={signerEmail}
+                        onChange={(e) => setSignerEmail(e.target.value)}
+                        style={{ padding: "0.5rem", borderRadius: "6px", border: "1px solid #ccc" }}
+                      />
                       <input
                         type="text"
-                        placeholder="John Doe"
-                        value={typedName}
-                        onChange={(e) => setTypedName(e.target.value)}
-                        style={{ width: "100%", padding: "0.6rem", border: "1px solid #ccc", borderRadius: "8px", marginTop: "4px" }}
-                      />
-                    </div>
-                    <div>
-                      <label style={{ fontSize: "0.85rem", color: "var(--muted)" }}>Font Style:</label>
-                      <select
-                        value={typedFont}
-                        onChange={(e) => setTypedFont(e.target.value)}
-                        style={{ width: "100%", padding: "0.6rem", border: "1px solid #ccc", borderRadius: "8px", marginTop: "4px" }}
-                      >
-                        <option value="cursive">Cursive Cursive</option>
-                        <option value="formal">Elegant Serif</option>
-                      </select>
-                    </div>
-                  </div>
-                )}
-
-                {signatureImage && (
-                  <div style={{ marginTop: "1rem", padding: "0.5rem", border: "1px solid #ddd", borderRadius: "8px", background: "#fff" }}>
-                    <span style={{ fontSize: "0.75rem", color: "var(--muted)" }}>Signature Preview:</span>
-                    <img src={signatureImage} alt="signature" style={{ display: "block", maxHeight: "60px", margin: "auto" }} />
-                  </div>
-                )}
-
-                {/* Placement parameters */}
-                <div style={{ marginTop: "1.2rem", borderTop: "1px solid #eee", paddingTop: "1rem" }}>
-                  <p style={{ fontWeight: "bold", fontSize: "0.85rem", marginBottom: "0.5rem" }}>Placement on PDF:</p>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "0.4rem" }}>
-                    <div>
-                      <label style={{ fontSize: "0.75rem" }}>Page #</label>
-                      <input
-                        type="number"
-                        min={1}
-                        value={signPage}
-                        onChange={(e) => setSignPage(parseInt(e.target.value))}
-                        style={{ width: "100%", padding: "0.4rem" }}
-                      />
-                    </div>
-                    <div>
-                      <label style={{ fontSize: "0.75rem" }}>X Position (%)</label>
-                      <input
-                        type="number"
-                        min={0}
-                        max={100}
-                        value={signX}
-                        onChange={(e) => setSignX(parseInt(e.target.value))}
-                        style={{ width: "100%", padding: "0.4rem" }}
-                      />
-                    </div>
-                    <div>
-                      <label style={{ fontSize: "0.75rem" }}>Y Position (%)</label>
-                      <input
-                        type="number"
-                        min={0}
-                        max={100}
-                        value={signY}
-                        onChange={(e) => setSignY(parseInt(e.target.value))}
-                        style={{ width: "100%", padding: "0.4rem" }}
+                        placeholder="Signer Mobile"
+                        value={signerPhone}
+                        onChange={(e) => setSignerPhone(e.target.value)}
+                        style={{ padding: "0.5rem", borderRadius: "6px", border: "1px solid #ccc" }}
                       />
                     </div>
                   </div>
+
+                  <button
+                    onClick={handleSignPdf}
+                    className="primary-cta"
+                    style={{ width: "100%", marginTop: "1.5rem" }}
+                    disabled={processing || !esignFile || !signatureImage}
+                  >
+                    {processing ? "Signing Document..." : "eSign Document & Generate Audit Trail"}
+                  </button>
                 </div>
+              )}
 
-                {/* Signer Identity fields */}
-                <div style={{ marginTop: "1rem" }}>
-                  <p style={{ fontWeight: "bold", fontSize: "0.85rem", marginBottom: "0.5rem" }}>Audit Authentication Details:</p>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.5rem" }}>
-                    <input
-                      type="email"
-                      placeholder="Signer Email"
-                      value={signerEmail}
-                      onChange={(e) => setSignerEmail(e.target.value)}
-                      style={{ padding: "0.5rem", borderRadius: "6px", border: "1px solid #ccc" }}
-                    />
-                    <input
-                      type="text"
-                      placeholder="Signer Mobile"
-                      value={signerPhone}
-                      onChange={(e) => setSignerPhone(e.target.value)}
-                      style={{ padding: "0.5rem", borderRadius: "6px", border: "1px solid #ccc" }}
-                    />
-                  </div>
-                </div>
-
-                <button
-                  onClick={handleSignPdf}
-                  className="primary-cta"
-                  style={{ width: "100%", marginTop: "1.5rem" }}
-                  disabled={processing || !esignFile || !signatureImage}
-                >
-                  {processing ? "Signing Document..." : "eSign Document & Generate Audit Trail"}
-                </button>
-              </div>
-            )}
-
-            {/* TAB 4: TEMPLATES */}
-            {activeTab === "templates" && (
-              <div>
-                <label style={{ fontSize: "0.85rem", color: "var(--muted)" }}>Select Template Category:</label>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.5rem", marginTop: "4px" }}>
-                  {[
-                    { id: "invoice", label: "GST Invoice" },
-                    { id: "rent", label: "Rent Agreement" },
-                    { id: "resume", label: "Student Resume" },
-                    { id: "offer", label: "HR Offer Letter" }
-                  ].map((temp) => (
-                    <button
-                      key={temp.id}
-                      className={selectedTemplate === temp.id ? "segment active" : "segment"}
-                      style={{ padding: "0.45rem", fontSize: "0.8rem" }}
-                      onClick={() => setSelectedTemplate(temp.id as any)}
-                    >
-                      {temp.label}
-                    </button>
-                  ))}
-                </div>
-
-                <div className="template-form" style={{ marginTop: "1.2rem", display: "grid", gap: "0.6rem" }}>
-                  {selectedTemplate === "invoice" && (
-                    <>
-                      <div>
-                        <label>Business Name</label>
-                        <input
-                          type="text"
-                          value={templateFields.shopName}
-                          onChange={(e) => setTemplateFields({ ...templateFields, shopName: e.target.value })}
-                        />
-                      </div>
-                      <div>
-                        <label>GSTIN</label>
-                        <input
-                          type="text"
-                          value={templateFields.gstin}
-                          onChange={(e) => setTemplateFields({ ...templateFields, gstin: e.target.value })}
-                        />
-                      </div>
-                      <div>
-                        <label>Customer Name</label>
-                        <input
-                          type="text"
-                          value={templateFields.customerName}
-                          onChange={(e) => setTemplateFields({ ...templateFields, customerName: e.target.value })}
-                        />
-                      </div>
-                      <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1.2fr", gap: "4px" }}>
-                        <div>
-                          <label>Item Name</label>
-                          <input
-                            type="text"
-                            value={templateFields.itemName}
-                            onChange={(e) => setTemplateFields({ ...templateFields, itemName: e.target.value })}
-                          />
-                        </div>
-                        <div>
-                          <label>Qty</label>
-                          <input
-                            type="text"
-                            value={templateFields.itemQty}
-                            onChange={(e) => setTemplateFields({ ...templateFields, itemQty: e.target.value })}
-                          />
-                        </div>
-                        <div>
-                          <label>Rate</label>
-                          <input
-                            type="text"
-                            value={templateFields.itemRate}
-                            onChange={(e) => setTemplateFields({ ...templateFields, itemRate: e.target.value })}
-                          />
-                        </div>
-                      </div>
-                    </>
-                  )}
-
-                  {selectedTemplate === "rent" && (
-                    <>
-                      <div>
-                        <label>Landlord Name</label>
-                        <input
-                          type="text"
-                          value={templateFields.landlordName}
-                          onChange={(e) => setTemplateFields({ ...templateFields, landlordName: e.target.value })}
-                        />
-                      </div>
-                      <div>
-                        <label>Tenant Name</label>
-                        <input
-                          type="text"
-                          value={templateFields.tenantName}
-                          onChange={(e) => setTemplateFields({ ...templateFields, tenantName: e.target.value })}
-                        />
-                      </div>
-                      <div>
-                        <label>Property Address</label>
-                        <input
-                          type="text"
-                          value={templateFields.propertyAddress}
-                          onChange={(e) => setTemplateFields({ ...templateFields, propertyAddress: e.target.value })}
-                        />
-                      </div>
-                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "4px" }}>
-                        <div>
-                          <label>Rent / Month</label>
-                          <input
-                            type="text"
-                            value={templateFields.monthlyRent}
-                            onChange={(e) => setTemplateFields({ ...templateFields, monthlyRent: e.target.value })}
-                          />
-                        </div>
-                        <div>
-                          <label>Deposit</label>
-                          <input
-                            type="text"
-                            value={templateFields.securityDeposit}
-                            onChange={(e) => setTemplateFields({ ...templateFields, securityDeposit: e.target.value })}
-                          />
-                        </div>
-                      </div>
-                    </>
-                  )}
-
-                  {selectedTemplate === "resume" && (
-                    <>
-                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "4px" }}>
-                        <div>
-                          <label>Name</label>
-                          <input
-                            type="text"
-                            value={templateFields.resumeName}
-                            onChange={(e) => setTemplateFields({ ...templateFields, resumeName: e.target.value })}
-                          />
-                        </div>
-                        <div>
-                          <label>Professional Title</label>
-                          <input
-                            type="text"
-                            value={templateFields.resumeTitle}
-                            onChange={(e) => setTemplateFields({ ...templateFields, resumeTitle: e.target.value })}
-                          />
-                        </div>
-                      </div>
-                      <div>
-                        <label>Summary Description</label>
-                        <input
-                          type="text"
-                          value={templateFields.resumeSummary}
-                          onChange={(e) => setTemplateFields({ ...templateFields, resumeSummary: e.target.value })}
-                        />
-                      </div>
-                      <div>
-                        <label>Key Skills (comma separated)</label>
-                        <input
-                          type="text"
-                          value={templateFields.resumeSkills}
-                          onChange={(e) => setTemplateFields({ ...templateFields, resumeSkills: e.target.value })}
-                        />
-                      </div>
-                    </>
-                  )}
-
-                  {selectedTemplate === "offer" && (
-                    <>
-                      <div>
-                        <label>Candidate Name</label>
-                        <input
-                          type="text"
-                          value={templateFields.offerCandidate}
-                          onChange={(e) => setTemplateFields({ ...templateFields, offerCandidate: e.target.value })}
-                        />
-                      </div>
-                      <div>
-                        <label>Role</label>
-                        <input
-                          type="text"
-                          value={templateFields.offerRole}
-                          onChange={(e) => setTemplateFields({ ...templateFields, offerRole: e.target.value })}
-                        />
-                      </div>
-                      <div style={{ display: "grid", gridTemplateColumns: "1.2fr 1fr", gap: "4px" }}>
-                        <div>
-                          <label>Stipend / Salary (Monthly)</label>
-                          <input
-                            type="text"
-                            value={templateFields.offerSalary}
-                            onChange={(e) => setTemplateFields({ ...templateFields, offerSalary: e.target.value })}
-                          />
-                        </div>
-                        <div>
-                          <label>Offer Date</label>
-                          <input
-                            type="date"
-                            value={templateFields.offerDate}
-                            onChange={(e) => setTemplateFields({ ...templateFields, offerDate: e.target.value })}
-                          />
-                        </div>
-                      </div>
-                    </>
-                  )}
-                </div>
-
-                <button
-                  onClick={handleGenerateTemplate}
-                  className="primary-cta"
-                  style={{ width: "100%", marginTop: "1.5rem" }}
-                  disabled={processing}
-                >
-                  {processing ? "Generating PDF..." : "Export Draft as PDF"}
-                </button>
-              </div>
-            )}
-
-            {/* TAB 5: AI WORKFLOWS */}
-            {activeTab === "ai" && (
-              <div>
-                <div className="file-picker">
-                  <span>Upload PDF, TXT or MD File</span>
-                  <input
-                    type="file"
-                    accept=".pdf,.txt,.md"
-                    onChange={(e) => setAiFile(e.target.files?.[0] || null)}
-                  />
-                </div>
-
-                <div style={{ marginTop: "1rem" }}>
-                  <label style={{ fontSize: "0.85rem", color: "var(--muted)" }}>AI Task:</label>
-                  <div style={{ display: "flex", gap: "0.5rem", marginTop: "4px" }}>
+              {/* TAB 4: TEMPLATES */}
+              {activeTab === "templates" && (
+                <div>
+                  <label style={{ fontSize: "0.85rem", color: "var(--muted)" }}>Select Template Category:</label>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.5rem", marginTop: "4px" }}>
                     {[
-                      { id: "summarize", label: "Summarize" },
-                      { id: "translate", label: "Translate" }
-                    ].map((act) => (
+                      { id: "invoice", label: "GST Invoice" },
+                      { id: "rent", label: "Rent Agreement" },
+                      { id: "resume", label: "Student Resume" },
+                      { id: "offer", label: "HR Offer Letter" }
+                    ].map((temp) => (
                       <button
-                        key={act.id}
-                        className={aiAction === act.id ? "segment active" : "segment"}
-                        style={{ padding: "0.4rem 0.8rem", fontSize: "0.85rem", flex: 1 }}
-                        onClick={() => setAiAction(act.id as any)}
+                        key={temp.id}
+                        className={selectedTemplate === temp.id ? "segment active" : "segment"}
+                        style={{ padding: "0.45rem", fontSize: "0.8rem" }}
+                        onClick={() => setSelectedTemplate(temp.id as any)}
                       >
-                        {act.label}
+                        {temp.label}
                       </button>
                     ))}
                   </div>
-                </div>
 
-                {aiAction === "translate" && (
-                  <div style={{ marginTop: "1rem" }}>
-                    <label style={{ fontSize: "0.85rem", color: "var(--muted)" }}>Translation Angle:</label>
-                    <select
-                      style={{ width: "100%", padding: "0.6rem", border: "1px solid #ccc", borderRadius: "8px", marginTop: "4px" }}
-                      value={translateTarget}
-                      onChange={(e) => setTranslateTarget(e.target.value as any)}
-                    >
-                      <option value="en-to-hi">English to Hindi (हिंदी)</option>
-                      <option value="hi-to-en">Hindi (हिंदी) to English</option>
-                    </select>
-                  </div>
-                )}
-
-                <button
-                  onClick={handleAiAction}
-                  className="primary-cta"
-                  style={{ width: "100%", marginTop: "1.5rem" }}
-                  disabled={processing || !aiFile}
-                >
-                  {processing ? "Executing AI Pipeline..." : "Process with AI"}
-                </button>
-
-                {aiResult && (
-                  <div style={{ marginTop: "1.5rem", padding: "1rem", border: "1px solid #eee", borderRadius: "10px", background: "#fff" }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                      <p style={{ fontWeight: "bold", fontSize: "0.9rem", margin: 0 }}>AI Output Insights</p>
-                      <span className="status-pill scanned" style={{ fontSize: "0.75rem", padding: "0.1rem 0.4rem" }}>Completed</span>
-                    </div>
-
-                    {aiResult.summary && (
-                      <div style={{ marginTop: "0.8rem" }}>
-                        <p style={{ fontSize: "0.8rem", fontWeight: "bold", color: "var(--accent)" }}>Summary Bullet Points:</p>
-                        <ul style={{ margin: "0.3rem 0 0", paddingLeft: "1.2rem", fontSize: "0.85rem", color: "var(--text)" }}>
-                          {aiResult.summary.map((bullet, i) => <li key={i}>{bullet}</li>)}
-                        </ul>
-                      </div>
-                    )}
-
-                    {aiResult.keywords && (
-                      <div style={{ marginTop: "0.8rem" }}>
-                        <p style={{ fontSize: "0.8rem", fontWeight: "bold", color: "var(--accent)" }}>Key Concepts Detected:</p>
-                        <div style={{ display: "flex", flexWrap: "wrap", gap: "4px", marginTop: "4px" }}>
-                          {aiResult.keywords.map((kw, i) => (
-                            <span key={i} style={{ background: "rgba(201, 77, 33, 0.08)", border: "1px solid rgba(201, 77, 33, 0.15)", borderRadius: "4px", fontSize: "0.75rem", padding: "2px 6px" }}>
-                              {kw}
-                            </span>
-                          ))}
+                  <div className="template-form" style={{ marginTop: "1.2rem", display: "grid", gap: "0.6rem" }}>
+                    {selectedTemplate === "invoice" && (
+                      <>
+                        <div>
+                          <label>Business Name</label>
+                          <input
+                            type="text"
+                            value={templateFields.shopName}
+                            onChange={(e) => setTemplateFields({ ...templateFields, shopName: e.target.value })}
+                          />
                         </div>
-                      </div>
+                        <div>
+                          <label>GSTIN</label>
+                          <input
+                            type="text"
+                            value={templateFields.gstin}
+                            onChange={(e) => setTemplateFields({ ...templateFields, gstin: e.target.value })}
+                          />
+                        </div>
+                        <div>
+                          <label>Customer Name</label>
+                          <input
+                            type="text"
+                            value={templateFields.customerName}
+                            onChange={(e) => setTemplateFields({ ...templateFields, customerName: e.target.value })}
+                          />
+                        </div>
+                        <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1.2fr", gap: "4px" }}>
+                          <div>
+                            <label>Item Name</label>
+                            <input
+                              type="text"
+                              value={templateFields.itemName}
+                              onChange={(e) => setTemplateFields({ ...templateFields, itemName: e.target.value })}
+                            />
+                          </div>
+                          <div>
+                            <label>Qty</label>
+                            <input
+                              type="text"
+                              value={templateFields.itemQty}
+                              onChange={(e) => setTemplateFields({ ...templateFields, itemQty: e.target.value })}
+                            />
+                          </div>
+                          <div>
+                            <label>Rate</label>
+                            <input
+                              type="text"
+                              value={templateFields.itemRate}
+                              onChange={(e) => setTemplateFields({ ...templateFields, itemRate: e.target.value })}
+                            />
+                          </div>
+                        </div>
+                      </>
                     )}
 
-                    {aiResult.translation && (
-                      <div style={{ marginTop: "0.8rem" }}>
-                        <p style={{ fontSize: "0.8rem", fontWeight: "bold", color: "var(--accent)" }}>Translated Output:</p>
-                        <textarea
-                          readOnly
-                          value={aiResult.translation}
-                          style={{ width: "100%", minHeight: "8rem", padding: "0.5rem", border: "1px solid #eee", borderRadius: "8px", fontSize: "0.85rem", marginTop: "4px" }}
-                        />
-                      </div>
+                    {selectedTemplate === "rent" && (
+                      <>
+                        <div>
+                          <label>Landlord Name</label>
+                          <input
+                            type="text"
+                            value={templateFields.landlordName}
+                            onChange={(e) => setTemplateFields({ ...templateFields, landlordName: e.target.value })}
+                          />
+                        </div>
+                        <div>
+                          <label>Tenant Name</label>
+                          <input
+                            type="text"
+                            value={templateFields.tenantName}
+                            onChange={(e) => setTemplateFields({ ...templateFields, tenantName: e.target.value })}
+                          />
+                        </div>
+                        <div>
+                          <label>Property Address</label>
+                          <input
+                            type="text"
+                            value={templateFields.propertyAddress}
+                            onChange={(e) => setTemplateFields({ ...templateFields, propertyAddress: e.target.value })}
+                          />
+                        </div>
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "4px" }}>
+                          <div>
+                            <label>Rent / Month</label>
+                            <input
+                              type="text"
+                              value={templateFields.monthlyRent}
+                              onChange={(e) => setTemplateFields({ ...templateFields, monthlyRent: e.target.value })}
+                            />
+                          </div>
+                          <div>
+                            <label>Deposit</label>
+                            <input
+                              type="text"
+                              value={templateFields.securityDeposit}
+                              onChange={(e) => setTemplateFields({ ...templateFields, securityDeposit: e.target.value })}
+                            />
+                          </div>
+                        </div>
+                      </>
                     )}
 
-                    {aiResult.hash && (
-                      <div style={{ marginTop: "0.8rem", borderTop: "1px solid #f0f0f0", paddingTop: "0.5rem", fontSize: "0.7rem", color: "var(--muted)", display: "flex", justifyContent: "space-between" }}>
-                        <span>Reference ID: {aiResult.hash}</span>
-                        <span>Processed Locally</span>
-                      </div>
+                    {selectedTemplate === "resume" && (
+                      <>
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "4px" }}>
+                          <div>
+                            <label>Name</label>
+                            <input
+                              type="text"
+                              value={templateFields.resumeName}
+                              onChange={(e) => setTemplateFields({ ...templateFields, resumeName: e.target.value })}
+                            />
+                          </div>
+                          <div>
+                            <label>Professional Title</label>
+                            <input
+                              type="text"
+                              value={templateFields.resumeTitle}
+                              onChange={(e) => setTemplateFields({ ...templateFields, resumeTitle: e.target.value })}
+                            />
+                          </div>
+                        </div>
+                        <div>
+                          <label>Summary Description</label>
+                          <input
+                            type="text"
+                            value={templateFields.resumeSummary}
+                            onChange={(e) => setTemplateFields({ ...templateFields, resumeSummary: e.target.value })}
+                          />
+                        </div>
+                        <div>
+                          <label>Key Skills (comma separated)</label>
+                          <input
+                            type="text"
+                            value={templateFields.resumeSkills}
+                            onChange={(e) => setTemplateFields({ ...templateFields, resumeSkills: e.target.value })}
+                          />
+                        </div>
+                      </>
+                    )}
+
+                    {selectedTemplate === "offer" && (
+                      <>
+                        <div>
+                          <label>Candidate Name</label>
+                          <input
+                            type="text"
+                            value={templateFields.offerCandidate}
+                            onChange={(e) => setTemplateFields({ ...templateFields, offerCandidate: e.target.value })}
+                          />
+                        </div>
+                        <div>
+                          <label>Role</label>
+                          <input
+                            type="text"
+                            value={templateFields.offerRole}
+                            onChange={(e) => setTemplateFields({ ...templateFields, offerRole: e.target.value })}
+                          />
+                        </div>
+                        <div style={{ display: "grid", gridTemplateColumns: "1.2fr 1fr", gap: "4px" }}>
+                          <div>
+                            <label>Stipend / Salary (Monthly)</label>
+                            <input
+                              type="text"
+                              value={templateFields.offerSalary}
+                              onChange={(e) => setTemplateFields({ ...templateFields, offerSalary: e.target.value })}
+                            />
+                          </div>
+                          <div>
+                            <label>Offer Date</label>
+                            <input
+                              type="date"
+                              value={templateFields.offerDate}
+                              onChange={(e) => setTemplateFields({ ...templateFields, offerDate: e.target.value })}
+                            />
+                          </div>
+                        </div>
+                      </>
                     )}
                   </div>
-                )}
-              </div>
-            )}
-            
-          </div>
+
+                  <button
+                    onClick={handleGenerateTemplate}
+                    className="primary-cta"
+                    style={{ width: "100%", marginTop: "1.5rem" }}
+                    disabled={processing}
+                  >
+                    {processing ? "Generating PDF..." : "Export Draft as PDF"}
+                  </button>
+                </div>
+              )}
+
+              {/* TAB 5: AI WORKFLOWS */}
+              {activeTab === "ai" && (
+                <div>
+                  <div className="file-picker">
+                    <span>Upload PDF, TXT or MD File</span>
+                    <input
+                      type="file"
+                      accept=".pdf,.txt,.md"
+                      onChange={(e) => setAiFile(e.target.files?.[0] || null)}
+                    />
+                  </div>
+
+                  <div style={{ marginTop: "1rem" }}>
+                    <label style={{ fontSize: "0.85rem", color: "var(--muted)" }}>AI Task:</label>
+                    <div style={{ display: "flex", gap: "0.5rem", marginTop: "4px" }}>
+                      {[
+                        { id: "summarize", label: "Summarize" },
+                        { id: "translate", label: "Translate" }
+                      ].map((act) => (
+                        <button
+                          key={act.id}
+                          className={aiAction === act.id ? "segment active" : "segment"}
+                          style={{ padding: "0.4rem 0.8rem", fontSize: "0.85rem", flex: 1 }}
+                          onClick={() => setAiAction(act.id as any)}
+                        >
+                          {act.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {aiAction === "translate" && (
+                    <div style={{ marginTop: "1rem" }}>
+                      <label style={{ fontSize: "0.85rem", color: "var(--muted)" }}>Translation Angle:</label>
+                      <select
+                        style={{ width: "100%", padding: "0.6rem", border: "1px solid #ccc", borderRadius: "8px", marginTop: "4px" }}
+                        value={translateTarget}
+                        onChange={(e) => setTranslateTarget(e.target.value as any)}
+                      >
+                        <option value="en-to-hi">English to Hindi (हिंदी)</option>
+                        <option value="hi-to-en">Hindi (हिंदी) to English</option>
+                      </select>
+                    </div>
+                  )}
+
+                  <button
+                    onClick={handleAiAction}
+                    className="primary-cta"
+                    style={{ width: "100%", marginTop: "1.5rem" }}
+                    disabled={processing || !aiFile}
+                  >
+                    {processing ? "Executing AI Pipeline..." : "Process with AI"}
+                  </button>
+
+                  {aiResult && (
+                    <div style={{ marginTop: "1.5rem", padding: "1rem", border: "1px solid #eee", borderRadius: "10px", background: "#fff" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                        <p style={{ fontWeight: "bold", fontSize: "0.9rem", margin: 0 }}>AI Output Insights</p>
+                        <span className="status-pill scanned" style={{ fontSize: "0.75rem", padding: "0.1rem 0.4rem" }}>Completed</span>
+                      </div>
+
+                      {aiResult.summary && (
+                        <div style={{ marginTop: "0.8rem" }}>
+                          <p style={{ fontSize: "0.8rem", fontWeight: "bold", color: "var(--accent)" }}>Summary Bullet Points:</p>
+                          <ul style={{ margin: "0.3rem 0 0", paddingLeft: "1.2rem", fontSize: "0.85rem", color: "var(--text)" }}>
+                            {aiResult.summary.map((bullet, i) => <li key={i}>{bullet}</li>)}
+                          </ul>
+                        </div>
+                      )}
+
+                      {aiResult.keywords && (
+                        <div style={{ marginTop: "0.8rem" }}>
+                          <p style={{ fontSize: "0.8rem", fontWeight: "bold", color: "var(--accent)" }}>Key Concepts Detected:</p>
+                          <div style={{ display: "flex", flexWrap: "wrap", gap: "4px", marginTop: "4px" }}>
+                            {aiResult.keywords.map((kw, i) => (
+                              <span key={i} style={{ background: "rgba(201, 77, 33, 0.08)", border: "1px solid rgba(201, 77, 33, 0.15)", borderRadius: "4px", fontSize: "0.75rem", padding: "2px 6px" }}>
+                                {kw}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {aiResult.translation && (
+                        <div style={{ marginTop: "0.8rem" }}>
+                          <p style={{ fontSize: "0.8rem", fontWeight: "bold", color: "var(--accent)" }}>Translated Output:</p>
+                          <textarea
+                            readOnly
+                            value={aiResult.translation}
+                            style={{ width: "100%", minHeight: "8rem", padding: "0.5rem", border: "1px solid #eee", borderRadius: "8px", fontSize: "0.85rem", marginTop: "4px" }}
+                          />
+                        </div>
+                      )}
+
+                      {aiResult.hash && (
+                        <div style={{ marginTop: "0.8rem", borderTop: "1px solid #f0f0f0", paddingTop: "0.5rem", fontSize: "0.7rem", color: "var(--muted)", display: "flex", justifyContent: "space-between" }}>
+                          <span>Reference ID: {aiResult.hash}</span>
+                          <span>Processed Locally</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
         </div>
-      </section>
+      </div>
 
       {/* Trust & Architecture Showcase */}
       <section className="content-grid">
