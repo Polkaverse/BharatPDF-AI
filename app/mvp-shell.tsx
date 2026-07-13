@@ -55,7 +55,7 @@ export function MvpShell() {
 
   // --- OCR State ---
   const [ocrFile, setOcrFile] = useState<File | null>(null);
-  const [ocrLang, setOcrLang] = useState<string>("eng+hin");
+  const [ocrLang, setOcrLang] = useState<string>("eng");
   const [ocrText, setOcrText] = useState<string>("");
   const [ocrProgress, setOcrProgress] = useState<string>("");
 
@@ -1480,10 +1480,13 @@ THE TENANT: Shri/Smt. ${f.tenantName}, hereinafter referred to as the "SECOND PA
                       value={ocrLang}
                       onChange={(e) => setOcrLang(e.target.value)}
                     >
+                      <option value="eng">English Only</option>
+                      <option value="chi_sim+chi_tra">Chinese (Simplified & Traditional)</option>
+                      <option value="deu">German (Deutsch)</option>
+                      <option value="hin">Hindi (हिंदी)</option>
                       <option value="eng+hin">English + Hindi (Devanagari)</option>
                       <option value="eng+tam">English + Tamil</option>
                       <option value="eng+tel">English + Telugu</option>
-                      <option value="eng">English Only</option>
                     </select>
                   </div>
 
