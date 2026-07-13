@@ -16,9 +16,9 @@ const fs = require('fs');
     process.exit(1);
   }
 
-  // Go to dev server
+  // Go to production server
   try {
-    await page.goto('http://localhost:3001');
+    await page.goto('https://pdfstudiokit.vercel.app');
     await page.waitForSelector('.workspace-sidebar', { timeout: 5000 });
     results.navigation = "SUCCESS (Loaded Homepage)";
   } catch (e) {
