@@ -33,8 +33,13 @@ type TabId = "dashboard" | "templates" | "utilities" | "esign" | "ocr" | "ai";
 
 type UtilityTask = "merge" | "split" | "rotate" | "compress";
 
-export function MvpShell() {
-  const [activeTab, setActiveTab] = useState<TabId>("dashboard");
+export interface MvpShellProps {
+  initialTab?: TabId;
+  initialUtility?: UtilityTask;
+}
+
+export function MvpShell({ initialTab = "dashboard", initialUtility = "merge" }: MvpShellProps = {}) {
+  const [activeTab, setActiveTab] = useState<TabId>(initialTab);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [processing, setProcessing] = useState(false);
@@ -46,7 +51,7 @@ export function MvpShell() {
   const [pageRotations, setPageRotations] = useState<Record<number, number>>({}); // page index -> rotation angle
 
   // --- PDF Utilities State ---
-  const [utilityTask, setUtilityTask] = useState<UtilityTask>("merge");
+  const [utilityTask, setUtilityTask] = useState<UtilityTask>(initialUtility);
   const [utilityFiles, setUtilityFiles] = useState<File[]>([]);
   const [splitRanges, setSplitRanges] = useState<string>("");
   const [rotateAngle, setRotateAngle] = useState<number>(90);
@@ -1129,6 +1134,143 @@ THE TENANT: Shri/Smt. ${f.tenantName}, hereinafter referred to as the "SECOND PA
     }
   };
 
+  const renderSeoContent = () => {
+    switch (activeTab) {
+      case "dashboard":
+        return (
+          <section className="seo-documentation" style={{ marginTop: "3rem", borderTop: "1px solid #e5e5e5", paddingTop: "2rem" }}>
+            <h2 style={{ fontSize: "1.6rem", color: "var(--foreground)", marginBottom: "1rem" }}>PDF Studio - Secure Client-Side PDF Utilities & AI Tools</h2>
+            <p style={{ color: "var(--muted)", lineHeight: "1.6", fontSize: "0.95rem" }}>
+              Welcome to <strong>PDF Studio</strong>, the definitive offline-first document workspace designed for professionals, MSMEs, students, and businesses. We prioritize your privacy and data sovereignty by performing all critical operations—including file merges, splits, page rotations, and compression—directly inside your browser sandbox. Your files never touch external servers during basic operations.
+            </p>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "1.5rem", marginTop: "1.5rem" }}>
+              <div>
+                <h3 style={{ fontSize: "1.15rem", color: "var(--foreground)", marginBottom: "0.5rem" }}>100% Private Client-Side Processing</h3>
+                <p style={{ color: "var(--muted)", fontSize: "0.85rem", lineHeight: "1.5" }}>
+                  By leveraging WebAssembly and client-side processing, PDF Studio processes document layouts, signature placements, and split ranges locally. Your sensitive corporate blueprints, agreements, and invoices remain on your device.
+                </p>
+              </div>
+              <div>
+                <h3 style={{ fontSize: "1.15rem", color: "var(--foreground)", marginBottom: "0.5rem" }}>High-Speed Document Creation</h3>
+                <p style={{ color: "var(--muted)", fontSize: "0.85rem", lineHeight: "1.5" }}>
+                  Create fully formatted, professional PDF drafts including GST-compliant billing invoices, legally vetted rental agreements, and HR offer letters in seconds using our pre-designed templates.
+                </p>
+              </div>
+              <div>
+                <h3 style={{ fontSize: "1.15rem", color: "var(--foreground)", marginBottom: "0.5rem" }}>Zero Server Retention</h3>
+                <p style={{ color: "var(--muted)", fontSize: "0.85rem", lineHeight: "1.5" }}>
+                  We do not run background database logs of your uploaded files. All session states exist temporary in your local browser memory, guaranteeing absolute zero data retention.
+                </p>
+              </div>
+            </div>
+          </section>
+        );
+      case "templates":
+        return (
+          <section className="seo-documentation" style={{ marginTop: "3rem", borderTop: "1px solid #e5e5e5", paddingTop: "2rem" }}>
+            <h2 style={{ fontSize: "1.6rem", color: "var(--foreground)", marginBottom: "1rem" }}>How to Generate Professional Document Templates Online</h2>
+            <p style={{ color: "var(--muted)", lineHeight: "1.6", fontSize: "0.95rem" }}>
+              PDF Studio offers pre-built template builders for common corporate and legal document requirements. Here is how you can use them:
+            </p>
+            <ol style={{ color: "var(--muted)", fontSize: "0.9rem", lineHeight: "1.7", marginLeft: "1.2rem", marginTop: "1rem" }}>
+              <li>Select your document template from the builder (e.g., <strong>GST Invoice</strong>, <strong>Rent Agreement</strong>, <strong>Student Resume</strong>, or <strong>HR Offer Letter</strong>).</li>
+              <li>Input required data into the form fields—such as Business Names, GST numbers, Rental periods, or salary package figures.</li>
+              <li>Preview the form layouts in real-time, then click <strong>Export Draft as PDF</strong> to compile the document.</li>
+            </ol>
+            <h3 style={{ fontSize: "1.2rem", color: "var(--foreground)", marginTop: "1.5rem", marginBottom: "0.5rem" }}>Frequently Asked Questions</h3>
+            <div style={{ marginTop: "1rem" }}>
+              <p style={{ fontWeight: "bold", fontSize: "0.9rem", marginBottom: "0.2rem" }}>Q: Are these invoices and agreements legally binding?</p>
+              <p style={{ color: "var(--muted)", fontSize: "0.85rem", marginBottom: "1rem" }}>A: Yes, our templates output industry-standard PDF formatting. Rental agreements and HR letters are drafted based on standard practices, but can be further customized or signed to meet your local legal jurisdiction.</p>
+            </div>
+          </section>
+        );
+      case "utilities":
+        return (
+          <section className="seo-documentation" style={{ marginTop: "3rem", borderTop: "1px solid #e5e5e5", paddingTop: "2rem" }}>
+            <h2 style={{ fontSize: "1.6rem", color: "var(--foreground)", marginBottom: "1rem" }}>Guide to Free PDF Utilities (Merge, Split, Rotate, Compress)</h2>
+            <p style={{ color: "var(--muted)", lineHeight: "1.6", fontSize: "0.95rem" }}>
+              Perform key PDF operations locally with our interactive visual tools:
+            </p>
+            <div style={{ marginTop: "1.5rem" }}>
+              <h3 style={{ fontSize: "1.2rem", color: "var(--foreground)", marginBottom: "0.5rem" }}>Merge PDF Files</h3>
+              <p style={{ color: "var(--muted)", fontSize: "0.85rem", lineHeight: "1.5", marginBottom: "1rem" }}>
+                Upload multiple PDF documents. Drag or click the up/down arrows to reorder them, then click <strong>Execute MERGE</strong> to compile them into a single file. Perfect for combining reports.
+              </p>
+              <h3 style={{ fontSize: "1.2rem", color: "var(--foreground)", marginBottom: "0.5rem" }}>Split PDF Visually</h3>
+              <p style={{ color: "var(--muted)", fontSize: "0.85rem", lineHeight: "1.5", marginBottom: "1rem" }}>
+                Our visual grid renders a thumbnail card for every page in your PDF. Simply click individual page cards to select them. The split range string compiles automatically (e.g. `1-2, 5`), extracting exactly what you need.
+              </p>
+              <h3 style={{ fontSize: "1.2rem", color: "var(--foreground)", marginBottom: "0.5rem" }}>Rotate PDF Pages Individually</h3>
+              <p style={{ color: "var(--muted)", fontSize: "0.85rem", lineHeight: "1.5", marginBottom: "1rem" }}>
+                Rotate specific pages that were scanned upside down or sideways. Clicking a page card spins it 90 degrees clockwise in the preview. Click <strong>Execute ROTATE</strong> to save the custom layout angles.
+              </p>
+              <h3 style={{ fontSize: "1.2rem", color: "var(--foreground)", marginBottom: "0.5rem" }}>Compress PDF Locally</h3>
+              <p style={{ color: "var(--muted)", fontSize: "0.85rem", lineHeight: "1.5" }}>
+                Reduce file sizes before emailing. Choose Low, Medium, or High compression settings. PDF Studio optimizes resource dictionaries, images, and content streams inside the browser.
+              </p>
+            </div>
+          </section>
+        );
+      case "esign":
+        return (
+          <section className="seo-documentation" style={{ marginTop: "3rem", borderTop: "1px solid #e5e5e5", paddingTop: "2rem" }}>
+            <h2 style={{ fontSize: "1.6rem", color: "var(--foreground)", marginBottom: "1rem" }}>Legally Sign Documents Online with Secure eSign</h2>
+            <p style={{ color: "var(--muted)", lineHeight: "1.6", fontSize: "0.95rem" }}>
+              Our Secure eSign tool is built to comply with modern digital signature requirements, offering section auditing capabilities and click-to-place ease:
+            </p>
+            <ul style={{ color: "var(--muted)", fontSize: "0.9rem", lineHeight: "1.7", marginLeft: "1.2rem", marginTop: "1rem" }}>
+              <li><strong>Draw, Type, or Upload</strong>: Create your signature using your mouse/touchpad, typing in formatted script fonts, or uploading a PNG transparent signature image.</li>
+              <li><strong>Visual Click Placement</strong>: Upload your PDF and click anywhere on the interactive page board preview. The signature graphic automatically aligns to that exact page position.</li>
+              <li><strong>Audit Compliance</strong>: Includes optional fields for signer email and mobile verification to build legal audit metadata layers.</li>
+            </ul>
+            <h3 style={{ fontSize: "1.2rem", color: "var(--foreground)", marginTop: "1.5rem", marginBottom: "0.5rem" }}>Is eSigning Legal?</h3>
+            <p style={{ color: "var(--muted)", fontSize: "0.85rem", lineHeight: "1.5" }}>
+              Under electronic signature laws (such as Section 5 of the Indian Information Technology Act, 2000 and standard international eSign acts), electronic signatures are legally binding for most agreements, leases, receipts, and invoices.
+            </p>
+          </section>
+        );
+      case "ocr":
+        return (
+          <section className="seo-documentation" style={{ marginTop: "3rem", borderTop: "1px solid #e5e5e5", paddingTop: "2rem" }}>
+            <h2 style={{ fontSize: "1.6rem", color: "var(--foreground)", marginBottom: "1rem" }}>Secure Hindi OCR, English OCR & Multilingual Text Extraction</h2>
+            <p style={{ color: "var(--muted)", lineHeight: "1.6", fontSize: "0.95rem" }}>
+              Extract text from image-only scans, screenshots, or receipts without exposing confidential business data to external servers:
+            </p>
+            <div style={{ marginTop: "1.5rem" }}>
+              <h3 style={{ fontSize: "1.2rem", color: "var(--foreground)", marginBottom: "0.5rem" }}>English & Hindi (Devanagari) OCR Support</h3>
+              <p style={{ color: "var(--muted)", fontSize: "0.85rem", lineHeight: "1.5", marginBottom: "1rem" }}>
+                Our OCR scanner supports extracting Hindi Devanagari script alongside standard English, making it highly effective for Indian professionals reading government documents, invoices, or forms.
+              </p>
+              <h3 style={{ fontSize: "1.2rem", color: "var(--foreground)", marginBottom: "0.5rem" }}>How It Works Client-Side</h3>
+              <p style={{ color: "var(--muted)", fontSize: "0.85rem", lineHeight: "1.5", marginBottom: "1rem" }}>
+                When you upload an image, PDF Studio initiates Tesseract WebAssembly directly inside your browser. The training language files are stored in the browser's local cache (IndexedDB) for subsequent runs.
+              </p>
+              <h3 style={{ fontSize: "1.2rem", color: "var(--foreground)", marginBottom: "0.5rem" }}>Multilingual Capabilities</h3>
+              <p style={{ color: "var(--muted)", fontSize: "0.85rem", lineHeight: "1.5" }}>
+                Easily select between English, Hindi, German, and Chinese in the OCR Target Language dropdown to parse files in different scripts.
+              </p>
+            </div>
+          </section>
+        );
+      case "ai":
+        return (
+          <section className="seo-documentation" style={{ marginTop: "3rem", borderTop: "1px solid #e5e5e5", paddingTop: "2rem" }}>
+            <h2 style={{ fontSize: "1.6rem", color: "var(--foreground)", marginBottom: "1rem" }}>AI Workflows: Document Summarization & Translation</h2>
+            <p style={{ color: "var(--muted)", lineHeight: "1.6", fontSize: "0.95rem" }}>
+              Accelerate your document analysis by utilizing smart AI workflows built directly into the dashboard:
+            </p>
+            <ul style={{ color: "var(--muted)", fontSize: "0.9rem", lineHeight: "1.7", marginLeft: "1.2rem", marginTop: "1rem" }}>
+              <li><strong>Summarize Documents</strong>: Condense lengthy PDFs, agreements, or articles into 3 key bullet points containing main statistics and terms.</li>
+              <li><strong>Translate Languages</strong>: Faithfully translate text layers between English and Hindi while preserving context.</li>
+              <li><strong>Local Hybrid Fallback</strong>: Runs using local parsing models if APIs are unavailable, maintaining maximum service uptime.</li>
+            </ul>
+          </section>
+        );
+      default:
+        return null;
+    }
+  };
+
   return (
     <main className="page-shell">
       {/* Top Brand Banner */}
@@ -2098,8 +2240,7 @@ THE TENANT: Shri/Smt. ${f.tenantName}, hereinafter referred to as the "SECOND PA
           )}
         </div>
       </div>
-
-
+      {renderSeoContent()}
     </main>
   );
 }

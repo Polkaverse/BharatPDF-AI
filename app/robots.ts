@@ -6,6 +6,6 @@ export default function robots(): MetadataRoute.Robots {
       userAgent: "*",
       allow: "/",
     },
-    sitemap: "https://pdfstudiokit.vercel.app/sitemap.xml",
+    sitemap: "https://pdfstudio.site/sitemap.xml",
   };
 }
