@@ -60,7 +60,7 @@ If GitHub auto-deploy is later enabled, keep `main` as the production branch and
 
 The repo publish and Vercel project linkage can be completed from this workspace, but GitHub-to-Vercel automatic deploy triggers still require either:
 
-- a Vercel Git integration connected to `Polkaverse/pdf-studio`, or
+- a Vercel Git integration connected to `Polkaverse/pdfstudio`, or
 - a GitHub Actions deployment workflow with Vercel credentials stored as repository secrets.
 
 Until one of those is configured, production promotion is manual but reviewable.

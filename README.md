@@ -37,8 +37,8 @@ Deployment and rollback instructions live in [`docs/vercel-deployment.md`](docs/
 
 ## Fully Implemented Capabilities
 
-- **PDF Utilities**: Fully functional client-side merging (with interactive list reordering), page splitting (using custom page ranges), page rotation (per-page selection), and compression.
-- **Indian OCR**: WASM-based client-side OCR for English, Hindi (Devanagari), Tamil, and Telugu scripts, complete with editable textarea results and copy/download controls.
-- **eSign & Audit Trails**: Interactive signature capture (drawing canvas, handwritten cursive generators, graphic upload) with visual coordinates drag/drop. Generates a custom **Signing Certificate** (containing doc hash, timestamp, signer email/phone) and appends it to the final PDF.
+- **PDF Utilities**: Fully functional client-side merging (with interactive list reordering), page splitting (using visual page cards), page rotation (individual visual page cards rotation), and compression.
+- **OCR Engine**: Client-side WASM-based OCR for English, Chinese (Simplified & Traditional), German, and Hindi (Devanagari) scripts, complete with editable textarea results and copy/download controls.
+- **eSign & Audit Trails**: Interactive signature capture (drawing canvas, handwritten cursive generators, graphic upload) with visual coordinates click-to-place interactive preview board. Generates a custom **Signing Certificate** (containing doc hash, timestamp, signer email/phone) and appends it to the final PDF.
 - **Local Templates**: Form-driven PDF generators for Indian paperwork: GST Invoices, Rent Agreements, Resume layouts, and HR Offer Letters.
 - **AI Summary & Translation**: Combined translation (English-to-Hindi / Hindi-to-English) and page summarizer using Next.js routes.

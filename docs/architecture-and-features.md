@@ -14,13 +14,13 @@ graph TD
     Client -->|Local image OCR| TesseractClient[tesseract.js Client]
     Client -->|Form Templates| DocGenerator[Client Template Generator]
     Client -->|POST Request| NodeServer[Next.js Server API]
-    NodeServer -->|OCR Failover| TesseractServer[Tesseract Server Node]
+    NodeServer -->|PDF text extractor| PDFParse[pdf-parse Node]
     NodeServer -->|AI Summary/Translate| OpenAICall[OpenAI API Client]
 ```
 
 ### Key Technical Dependencies
 1. **`pdf-lib`**: Loaded dynamically for heavy client-side operations. Handles merging pages, slicing indexes, rotating coordinates, embedding canvases as images, and writing document streams.
-2. **`tesseract.js`**: WebAssembly compiled OCR engine. Integrated both client-side and server-side to guarantee offline/local functionality.
+2. **`tesseract.js`**: WebAssembly compiled OCR engine. Configured client-side in the browser to run image text extraction locally, bypassing Vercel serverless function timeout limits and ensuring raw files never leave the user's browser.
 3. **`lucide-react`**: Vector icon library for modern, premium visual styling.
 4. **`pdf-parse`**: Server-side parsing node to extract raw text layers from PDF streams.
 
@@ -29,26 +29,27 @@ graph TD
 ## 2. Comprehensive Feature Specification
 
 ### 2.1 PDF Utility Suite
-- **Merge**: Accepts multiple `.pdf` uploads. Users can interactively reorder files in the queue using drag controls. Returns a merged PDF output using the `copyPages` and `addPage` routines of a single consolidated `PDFDocument`.
-- **Split**: Users enter comma-separated indexes or hyphenated ranges (e.g. `1-3, 5`). The system validates index ranges and compiles a sliced copy.
-- **Rotate**: Allows rotating individual pages or the entire document by 90° clockwise increments. Modifies the page rotation register in the PDF metadata.
+- **Merge**: Accepts multiple `.pdf` uploads. Users can interactively reorder files in the queue using drag/arrow controls. Returns a merged PDF output using the `copyPages` and `addPage` routines of a single consolidated `PDFDocument`.
+- **Split**: Users can visually split PDFs by clicking page card previews in an interactive grid. The system validates index ranges and automatically compiles the split range parameter (e.g. `1-2, 5`), extracting pages client-side using `pdf-lib`.
+- **Rotate**: Allows rotating individual pages visually. Clicking a page card thumbnail rotates it 90° clockwise in the browser preview. Modifies the page rotation register in the PDF metadata before compilation.
 - **Compress**: Triggers standard stream formatting optimizations, stripping redundant objects and re-indexing references for a smaller file size.
 
-### 2.2 Indian OCR Engine
-- **Target Audience**: Indian offices, CA firms, and students handling scanned bills, low-quality documents, and certificates.
-- **Languages**: Mixed-script support for **English**, **Hindi (Devanagari)**, **Tamil**, and **Telugu**.
-- **WASM Failover**: Migrated to a dual client/server setup. If the local browser throws a Web Worker CSP/CORS error due to hosting constraints, the file is automatically dispatched to the server-side `/api/workflows/ocr` endpoint where Tesseract executes inside the Node.js thread, achieving 100% processing stability.
+### 2.2 OCR Engine
+- **Target Audience**: Business owners, CA firms, and students handling scanned bills, low-quality receipts, certificates, and forms.
+- **Languages Supported**: **English**, **Chinese (Simplified & Traditional)**, **German**, and **Hindi (Devanagari)**.
+- **Client-Side WASM Execution**: Image OCR is executed 100% client-side inside the user's browser context. The engine loads training language models (`.traineddata` files) directly and caches them locally in the browser's IndexedDB. This bypasses Vercel's 10-second serverless execution limit, provides real-time progress callbacks (e.g. `Recognizing Text: 80%`), and ensures absolute document privacy.
+- **PDF Text Layer Extraction**: PDF files are processed server-side via `/api/workflows/ocr` utilizing fast text parsing to extract embedded text layers instantly.
 
 ### 2.3 eSign & Digital Audit Trail
-- **Legal Compliance**: Designed to align with the **Information Technology Act, 2000 (India)** regarding electronic signatures and tamper-evident documentation.
+- **Legal Compliance**: Designed to align with **Section 5 of the Information Technology Act, 2000 (India)** regarding electronic signatures and tamper-evident documentation.
 - **Signature Forms**: Supports hand-drawn signatures (HTML5 Canvas vector track), formatted type signatures (utilizing script and serif font faces), and graphic image uploads.
-- **Visual Position Placement**: Users enter X and Y percentages (0-100%) to position the signature box on any target page. The engine scales coordinates dynamically based on the PDF page height/width.
-- **Audit Certificate**: Appends a professional "Signing Certificate" to the end of the document. The page logs the signer's identity metadata (email, phone, time stamp) and computes a unique verification SHA-256 document hash.
+- **Visual Click-to-Place Board**: Renders an interactive page board matching the document's aspect ratio. Clicking anywhere on the board records the relative X/Y coordinate click and positions the floating signature graphic instantly, eliminating guesswork.
+- **Audit Certificate**: Appends a professional "Signing Certificate" page to the end of the document. The page logs the signer's identity metadata (email, phone, time stamp) and computes a unique verification SHA-256 document hash.
 
 ### 2.4 Document Templates (MSME Automation)
 - **Templates Included**:
   1. **GST Invoice**: Draws clean tax layouts with automatic subtotal, CGST, and SGST breakdowns. Generates and prints a **Scannable UPI Payment QR Code** (encoded with payee UPI ID and billing total) inside the document footer.
-  2. **Rent Agreement**: Generates a standard legally binding 2-page Indian rental agreement containing descriptions of schedule premises, security deposits, lease terms, utilities maintenance clauses, notice period rules, and witness signatures.
+  2. **Rent Agreement**: Generates a standard legally binding Indian rental agreement containing descriptions of schedule premises, security deposits, lease terms, utilities maintenance clauses, notice period rules, and witness signatures.
   3. **Student Resume**: Builds a clean, professional academic resume template.
   4. **HR Offer Letter**: Generates a formal internship appointment letter complete with company letterhead, stipend details, and director sign-offs.
 
@@ -62,10 +63,10 @@ graph TD
 
 PDF Studio incorporates deep SEO optimizations to rank for search queries across global and regional markets:
 
-1. **Title & Descriptions**: Custom tags target search intent (e.g. "Hindi PDF OCR online", "free PDF tools India", "GST Invoice PDF Generator").
-2. **Schema.org JSON-LD**: Injected structured data (Type: `SoftwareApplication`, Category: `BusinessApplication`, Currency: `INR`) to qualify for Google rich search results.
-3. **Dynamic Sitemap (`/sitemap.xml`)**: Configured via Next.js `app/sitemap.ts` to index the primary root directory.
-4. **Robots Configuration (`/robots.txt`)**: Declared via `app/robots.ts` to allow global search indexing.
+1. **Dedicated Landing Pages**: Refactored to define 7 new statically optimized (SSG) route paths under `/tools/...`. Each tool landing page defines custom `Metadata` (Title, Description, Keywords, OpenGraph).
+2. **Schema.org JSON-LD**: Injected structured data (`HowTo` schema showing step-by-step instructions, and `SoftwareApplication` schema detailing operate systems, pricing `0 INR`, and publisher details) to qualify for Google rich search results.
+3. **Dynamic Sitemap (`/sitemap.xml`)**: Generated dynamically via `app/sitemap.ts` to index all 8 custom page routes under `https://pdfstudio.site`.
+4. **Robots Configuration (`/robots.txt`)**: Declared via `app/robots.ts` to point crawlers directly to the sitemap under `https://pdfstudio.site`.
 
 ---
 
@@ -91,4 +92,4 @@ Deploy to production via CLI:
 ```bash
 vercel --prod --yes
 ```
-This deploys the Next.js target directory seamlessly to `https://pdfstudiokit.vercel.app`.
+This deploys the Next.js target directory seamlessly to `https://pdfstudio.site`.
